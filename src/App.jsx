@@ -5230,23 +5230,26 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('chess_tactics_session'));
-      if (saved?.puzzles?.length) {
+      const puzzle = saved?.puzzle ?? (saved?.puzzles?.[saved?.idx ?? 0]); // support old format
+      if (puzzle) {
         tacticsRestoredRef.current = true;
         setTacticsDiff(saved.diff ?? null);
         setTacticsTheme(saved.theme ?? null);
-        setTacticsPuzzles(saved.puzzles);
-        setTacticsIdx(saved.idx ?? 0);
+        setTacticsPuzzles([puzzle]);
+        setTacticsIdx(0);
         setTacticsMode(true);
       }
     } catch {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Save chess tactics session to localStorage whenever state changes
+  // Save chess tactics session to localStorage (only current puzzle to avoid unbounded growth)
   useEffect(() => {
     if (!tacticsMode || !tacticsPuzzles.length) return;
     try {
+      const cur = tacticsPuzzles[tacticsIdx];
+      if (!cur) return;
       localStorage.setItem('chess_tactics_session', JSON.stringify({
-        diff: tacticsDiff, theme: tacticsTheme, puzzles: tacticsPuzzles, idx: tacticsIdx,
+        diff: tacticsDiff, theme: tacticsTheme, puzzle: cur, idx: 0,
       }));
     } catch {}
   }, [tacticsMode, tacticsDiff, tacticsTheme, tacticsPuzzles, tacticsIdx]);
@@ -5703,7 +5706,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <div ref={fsAreaRefCb} style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"4px",overflow:"hidden",boxSizing:"border-box"}}>
           <div style={{width:bwStr}}>
             {tacticsMode && tacCurPuzzle && <div style={{color:"#fff",fontSize:14,fontFamily:serif,textAlign:"center",marginBottom:4,opacity:0.9}}>
-              {playerLang==="en"?"Puzzle":"問題"} {tacticsIdx+1}/{tacticsPuzzles.length} · {tacCurPuzzle.difficulty} · {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
+              {playerLang==="en"?`Puzzle #${tacticsIdx+1}`:`問題 ${tacticsIdx+1}問目`} · {tacCurPuzzle.difficulty} · {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
             </div>}
             <div style={{transform:"rotate(180deg)"}}><ChessCapRow capColor="b"/></div>
             {boardEl}
@@ -6723,24 +6726,12 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             {playerLang==="en"?"Keep trying — you'll get it!":"惜しい！もう一度チャレンジしよう！"}
           </div>
         )}
-        {tacticsResultS==='correct' && tacticsIdxS >= tacticsPuzzlesS.length-1 && (
-          <div style={{fontSize:13,color:"#7a5838",marginBottom:12}}>
-            {playerLang==="en"?"All puzzles complete! 🎉":"全問クリア！🎉"}
-          </div>
-        )}
         <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:4}}>
           {tacticsResultS==='correct' ? (<>
-            {tacticsIdxS < tacticsPuzzlesS.length-1 ? (
-              <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>i+1); }}
-                style={{...btnModS,background:"#c8a86a",color:"#fff",fontWeight:600,fontSize:16}}>
-                ▶ {playerLang==="en"?"Next Puzzle":"次の問題"}
-              </button>
-            ) : (
-              <button onClick={()=>{ localStorage.removeItem('shogi_tactics_session'); setTacticsModeS(false); resetShogi(); }}
-                style={{...btnModS,background:"#c8a86a",color:"#fff",fontWeight:600,fontSize:16}}>
-                {playerLang==="en"?"Finish":"終了"}
-              </button>
-            )}
+            <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length); }}
+              style={{...btnModS,background:"#c8a86a",color:"#fff",fontWeight:600,fontSize:16}}>
+              ▶ {playerLang==="en"?"Next Puzzle":"次の問題"}
+            </button>
           </>) : (<>
             <button onClick={()=>{ setTacticsResultS(null); loadShogiTacticsPuzzle(tacCurPuzzleS); }}
               style={{...btnModS,background:"#f5ece0",color:"#7a5838",border:"1px solid #c8b090"}}>
@@ -6781,7 +6772,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const tacticsHeaderElS = tacticsModeS && tacCurPuzzleS ? (
     <div style={{fontFamily:serif,textAlign:"center",padding:"6px 0 2px"}}>
       <span style={{fontSize:15,color:"#7a5838",marginRight:8}}>
-        {playerLang==="en"?"Puzzle":"問題"} {tacticsIdxS+1}/{tacticsPuzzlesS.length}
+        {playerLang==="en"?`Puzzle #${tacticsIdxS+1}`:`問題 ${tacticsIdxS+1}問目`}
       </span>
       <span style={{background:tacCurPuzzleS.difficulty==='Easy'?"#4a9":(tacCurPuzzleS.difficulty==='Hard'?"#d44":"#c90"),color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:13,fontWeight:600}}>
         {tacCurPuzzleS.difficulty}
@@ -6814,24 +6805,21 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       </>) : tacticsResultS==='correct' ? (<>
         <span style={{fontSize:22}}>✅</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#3a7a3a",alignSelf:"center"}}>{playerLang==="en"?"Correct!":"正解！"}</span>
-        {tacticsIdxS < tacticsPuzzlesS.length-1
-          ? <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>i+1); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
-          : <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(0); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>↺ {playerLang==="en"?"Start Over":"最初から"}</button>
-        }
+        <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
       </>) : tacticsResultS==='incorrect' ? (<>
         <span style={{fontSize:22}}>❌</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#c04040",alignSelf:"center"}}>{playerLang==="en"?"Incorrect":"不正解"}</span>
         <button onClick={()=>{ setTacticsResultS(null); loadShogiTacticsPuzzle(tacCurPuzzleS); }} style={btnStyleS}>{playerLang==="en"?"Retry":"もう一度"}</button>
         <button onClick={()=>{ setTacticsResultS(null); setTacticsShowAnswerS(true); }} style={btnStyleS}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
-        <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1)); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
+        <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
       </>) : (<>
         <button onClick={()=>setTacticsHintUsedS(true)} disabled={tacticsHintUsedS} style={{...btnStyleS,opacity:tacticsHintUsedS?0.5:1}}>{playerLang==="en"?"Hint 💡":"ヒント 💡"}</button>
         <button onClick={()=>setTacticsShowAnswerS(true)} style={btnStyleS}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
-        <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...btnStyleS,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>⏭ {playerLang==="en"?"Skip":"スキップ"}</button>
+        <button onClick={()=>setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length)}>⏭ {playerLang==="en"?"Skip":"スキップ"}</button>
       </>)}
       {!tacticsErrorS && !tacticsLoadingS && (<>
         <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...btnStyleS,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
-        <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...btnStyleS,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
+        <button onClick={()=>setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length)} style={btnStyleS}>▶</button>
       </>)}
       <button onClick={()=>{ localStorage.removeItem('shogi_tactics_session'); setTacticsModeS(false); resetShogi(); }} style={{...btnStyleS,color:"#9a8878"}}>✕ {playerLang==="en"?"Exit":"終了"}</button>
     </div>
@@ -6883,7 +6871,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <div ref={fsAreaRefCb} style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"4px",overflow:"hidden",boxSizing:"border-box"}}>
           <div style={{width:bwStr}}>
             {tacticsModeS && tacCurPuzzleS && <div style={{color:"#fff",fontSize:14,fontFamily:serif,textAlign:"center",marginBottom:4,opacity:0.9}}>
-              {playerLang==="en"?"Puzzle":"問題"} {tacticsIdxS+1}/{tacticsPuzzlesS.length} · {tacCurPuzzleS.difficulty} · {playerLang==="en"?tacCurPuzzleS.descEn:tacCurPuzzleS.descJa}
+              {playerLang==="en"?`Puzzle #${tacticsIdxS+1}`:`問題 ${tacticsIdxS+1}問目`} · {tacCurPuzzleS.difficulty} · {playerLang==="en"?tacCurPuzzleS.descEn:tacCurPuzzleS.descJa}
             </div>}
             <div style={{transform:"rotate(180deg)"}}><ShogiHandArea color="b"/></div>
             {boardEl}
@@ -6903,23 +6891,20 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
               ) : tacticsResultS==='correct' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>✅</span>
                 <span style={{color:"#7ef07e",fontFamily:serif,fontSize:14,alignSelf:"center"}}>{playerLang==="en"?"Correct!":"正解！"}</span>
-                {tacticsIdxS<tacticsPuzzlesS.length-1
-                  ? <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>i+1);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶ {playerLang==="en"?"Next":"次"}</button>
-                  : <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(0);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>↺ {playerLang==="en"?"Restart":"最初から"}</button>
-                }
+                <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶ {playerLang==="en"?"Next":"次"}</button>
               </>) : tacticsResultS==='incorrect' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>❌</span>
                 <button onClick={()=>{setTacticsResultS(null);loadShogiTacticsPuzzle(tacCurPuzzleS);}} style={fsBtn}>{playerLang==="en"?"Retry":"もう一度"}</button>
                 <button onClick={()=>{setTacticsResultS(null);setTacticsShowAnswerS(true);}} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
-                <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1));}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶</button>
+                <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶</button>
               </>) : (<>
                 <button onClick={()=>setTacticsHintUsedS(true)} disabled={tacticsHintUsedS} style={{...fsBtn,opacity:tacticsHintUsedS?0.5:1}}>💡</button>
                 <button onClick={()=>setTacticsShowAnswerS(true)} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
-                <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...fsBtn,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>⏭</button>
+                <button onClick={()=>setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length)} style={fsBtn}>⏭</button>
               </>)}
               {!tacticsErrorS && !tacticsLoadingS && (<>
                 <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...fsBtn,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
-                <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...fsBtn,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
+                <button onClick={()=>setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length)} style={fsBtn}>▶</button>
               </>)}
               <button onClick={()=>{localStorage.removeItem('shogi_tactics_session');setTacticsModeS(false);resetShogi();}} style={{...fsBtn,opacity:0.7}}>✕</button>
             </div>}
