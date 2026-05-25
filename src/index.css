@@ -1,0 +1,136 @@
+/* ── Wooden Traveler Series — グローバルスタイル ───────────────────────── */
+:root {
+  /* Warm Parchment Palette */
+  --wt-bg:          #f1dab8;
+  --wt-surface:     #faf5e8;
+  --wt-surface-hi:  #fffcf5;
+  --wt-border-gold: #c4a058;
+  --wt-border:      #d4bc88;
+  --wt-border-sub:  #e8d8b4;
+  --wt-text-dark:   #2a1a08;
+  --wt-text:        #5a3c18;
+  --wt-text-mid:    #7c6040;
+  --wt-text-muted:  #a89070;
+  --wt-gold:        #b08830;
+  --wt-wood-dark:   #4c2e0c;
+  --wt-wood:        #7a5020;
+
+  --sans:    'Cormorant Garamond', 'Zen Old Mincho', Georgia, serif;
+  --heading: 'Cormorant Garamond', 'Zen Old Mincho', Georgia, serif;
+  --serif:   'Cormorant Garamond', 'Zen Old Mincho', Georgia, serif;
+  --caption: 'Cormorant Garamond', 'Zen Old Mincho', Georgia, serif;
+  --ui:      'Cormorant Garamond', 'Zen Old Mincho', Georgia, serif;
+  --mono:    ui-monospace, Consolas, monospace;
+
+  font: 19px/1.8 var(--ui);
+  font-size-adjust: from-font;
+  letter-spacing: 0.04em;
+  color-scheme: light;
+  color: var(--wt-text);
+  background: #f1dab8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 17px;
+  }
+}
+
+/* グローバル最小フォントサイズ 19px */
+html {
+  font-size: max(19px, 1em);
+}
+
+body {
+  margin: 0;
+  background: #faf5e8;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* ボタン・インプットのデフォルトリセット */
+button {
+  font-family: var(--sans);
+}
+input, textarea {
+  font-family: var(--sans);
+}
+
+/* スクロールバーを細く温かみのある色に */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wt-border) transparent;
+}
+
+/* ヘッダーナビ：デスクトップは画像オーバーレイ、モバイルは画像下に移動 */
+.header-wrap {
+  width: 100%;
+  position: relative;
+}
+.header-nav {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+}
+@media (max-width: 600px) {
+  .header-nav {
+    right: 0;
+  }
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+}
+
+h1 {
+  font-size: 56px;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+h2 {
+  font-size: 24px;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}

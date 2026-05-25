@@ -1,0 +1,91 @@
+{
+  "rules": {
+    // 読み取り：全体公開（変更なし）
+    ".read": true,
+
+    // ─── メンバー管理 ──────────────────────────────────────────
+    // /members は {Thomas:{lang,kids,avatarUrl}, ...} の名前キー形式で保存
+    // セキュリティルールの「ホワイトリスト」となるパスのため
+    // アプリ内のパスワード認証を通過したユーザーが管理する（書き込み制限なし）
+    "members": {
+      ".write": true
+    },
+
+    // ─── チェス / 将棋 対局データ ─────────────────────────────
+    // JSON文字列で保存されるため sender 検証不可。
+    // membersが存在する（初期化済み）場合のみ書き込み可。
+    // !data.exists() はDBが空の初回起動時のブートストラップを許可。
+    "gamesData": {
+      ".write": "!data.exists() || root.child('members').exists()"
+    },
+    "shogiGamesData": {
+      ".write": "!data.exists() || root.child('members').exists()"
+    },
+
+    // ─── チャットメッセージ ────────────────────────────────────
+    // 作成：sender フィールドが /members に存在するメンバー名であること
+    // 削除：既存データの削除のみ許可（自動クリーンアップ・メッセージ削除ボタン）
+    "chat": {
+      "$roomId": {
+        "$msgId": {
+          ".write": "newData.exists() ? root.child('members').child(newData.child('sender').val()).exists() : data.exists()"
+        }
+      }
+    },
+
+    // ─── チャットルーム（部屋メタデータ）─────────────────────
+    // ルーム作成・名前変更・lastMessageAt 更新など。
+    // メンバーが存在する（アプリ初期化済み）場合のみ許可。
+    "chatRooms": {
+      ".write": "!data.exists() || root.child('members').exists()"
+    },
+
+    // ─── タクティクス成績（チェス・将棋共通）────────────────
+    // パスにプレイヤー名が含まれる → そのプレイヤーが登録メンバーであること
+    "tactics": {
+      "$playerName": {
+        ".write": "root.child('members').child($playerName).exists()"
+      }
+    },
+
+    // ─── 棋譜解析結果 ─────────────────────────────────────────
+    "analyses": {
+      "$playerName": {
+        ".write": "root.child('members').child($playerName).exists()"
+      }
+    },
+
+    // ─── チャット既読タイムスタンプ ───────────────────────────
+    "userReadTs": {
+      "$playerName": {
+        ".write": "root.child('members').child($playerName).exists()"
+      }
+    },
+
+    // ─── 解析バッジ タイムスタンプ ────────────────────────────
+    "userAnalysisTs": {
+      "$playerName": {
+        ".write": "root.child('members').child($playerName).exists()"
+      }
+    },
+
+    // ─── チェス卓 既読状態 ────────────────────────────────────
+    "gameTabSeen": {
+      "$playerName": {
+        ".write": "root.child('members').child($playerName).exists()"
+      }
+    },
+
+    // ─── 将棋卓 既読状態 ──────────────────────────────────────
+    "shogiTabSeen": {
+      "$playerName": {
+        ".write": "root.child('members').child($playerName).exists()"
+      }
+    },
+
+    // ─── UI翻訳キャッシュ ─────────────────────────────────────
+    "uiTranslations": {
+      ".write": "!data.exists() || root.child('members').exists()"
+    }
+  }
+}
