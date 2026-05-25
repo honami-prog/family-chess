@@ -5960,6 +5960,8 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     shogiWorkerRef.current = null;
     w.terminate();
     if(!move){ setAiThinking(false); return; }
+    // If we switched to tactics mode while AI was computing, discard the move
+    if(!vsAIRefSh.current){ setAiThinking(false); return; }
     setShogiMoveHistory(prev=>[...prev,{board:bd.map(row=>row.map(p=>p?{...p}:null)),cap:{b:{...cp.b},w:{...cp.w}}}]);
     if(move.type==='drop'){
       setPracticeGameHistory(prev=>[...prev,{drop:move.pType,to:[move.r,move.c]}]);
@@ -6088,12 +6090,15 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             setLastMoveSh({drop:true,to:[r,c]});
             setTacticsResultS('correct');
             saveShogiTacticsFb(tacPuzzle,'correct',tacticsHintUsedS,newAtt);
+            return;
           } else {
             setDropSel(null); setLegal([]);
             setTacticsResultS('incorrect');
+            return;
           }
-        } else { setDropSel(null); setLegal([]); }
-        return;
+        }
+        // Not a legal drop square — clear hand selection and fall through to board piece selection
+        setDropSel(null); setLegal([]);
       }
       if (sel) {
         const isLegal = legal.some(([lr,lc])=>lr===r&&lc===c);
@@ -6225,7 +6230,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // ── Shogi Tactics helpers ──────────────────────────────────────
   const loadShogiTacticsPuzzle = useCallback((puzzle) => {
     if (!puzzle) return;
-    const bd = puzzle.board.map(row => row.map(cell => cell ? {type:cell.t, color:cell.c, p:false} : null));
+    const bd = puzzle.board.map(row => row.map(cell => cell ? {type:cell.t, color:cell.c, p:cell.p||false} : null));
     setBoard(bd);
     const handB = {}; const handW = {};
     if (puzzle.hand?.b) Object.assign(handB, puzzle.hand.b);
@@ -6281,7 +6286,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           const pSrc=getShogiImg({type:t,color,p:false});
           const pLoaded=_shogiLoadedRef2.current.has(pSrc);
           return (
-            <div key={t} onClick={()=>onHandClick(color,t)} style={{position:"relative",cursor:"pointer"}}>
+            <div key={t} onClick={()=>onHandClick(color,t)} style={{position:"relative",cursor:"pointer",touchAction:"manipulation"}}>
               <div style={{width:sz,height:sz+2,background:isSelDrop?"rgba(212,168,136,0.5)":"transparent",border:`1px solid ${isSelDrop?"#b88a6a":"transparent"}`,borderRadius:3,position:"relative",filter:isSelDrop?"drop-shadow(0 0 3px rgba(180,100,30,0.7))":"none"}}>
                 {!pLoaded&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.floor(sz*0.48),fontFamily:font,fontWeight:700,color:color==="b"?"#1a0e04":"#6a4020"}}>{SK[t]}</div>}
                 <img src={pSrc} alt="" draggable={false} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",display:"block",opacity:pLoaded?1:0}} ref={el=>{if(el&&el.complete&&el.naturalWidth>0)_markLoaded2(pSrc);}} onLoad={()=>_markLoaded2(pSrc)} onError={()=>{}}/>
@@ -6320,6 +6325,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         background:"#EDE0C8",
         display:"flex",alignItems:"center",justifyContent:"center",
         cursor:"pointer",position:"relative",boxSizing:"border-box",overflow:"hidden",
+        touchAction:"manipulation",
       }}>
         {(isLastFrom||isLastTo)&&!isSel&&<div style={{position:"absolute",inset:0,background:"rgba(200,168,106,0.45)",pointerEvents:"none",zIndex:1}}/>}
         {isSel&&<div style={{position:"absolute",inset:0,background:"rgba(100,130,60,0.5)",pointerEvents:"none",zIndex:1}}/>}
@@ -6562,6 +6568,9 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <div style={{fontSize:20,fontWeight:700,color:"#3a2e22",marginBottom:16}}>{playerLang==="en"?"Select Difficulty":"難易度を選択"}</div>
         {[null,'Easy','Normal','Hard'].map(d=>(
           <button key={String(d)} onClick={()=>{
+            // Terminate any running AI before entering tactics mode
+            if(shogiWorkerRef.current){ shogiWorkerRef.current.terminate(); shogiWorkerRef.current=null; }
+            setAiThinking(false);
             setTacticsDiffS(d); setTacticsDiffSelectS(false);
             setTacticsModeS(true); setVsAI(false);
           }} style={{...btnStyleS,display:"block",width:"100%",marginBottom:8,fontSize:17,background:tacticsDiffS===d?"#c8a86a":"transparent",color:tacticsDiffS===d?"#fff":"#7a5838"}}>
@@ -6583,6 +6592,12 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       <span style={{background:tacCurPuzzleS.difficulty==='Easy'?"#4a9":(tacCurPuzzleS.difficulty==='Hard'?"#d44":"#c90"),color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:13,fontWeight:600}}>
         {tacCurPuzzleS.difficulty}
       </span>
+      <div style={{fontSize:14,color:"#3a7a3a",fontWeight:600,marginTop:4,background:"rgba(60,140,60,0.08)",borderRadius:6,padding:"2px 8px",display:"inline-block"}}>
+        {tacCurPuzzleS.turn==="b"
+          ? (playerLang==="en"?"▶ Sente (Black) to move — your pieces are at the BOTTOM ↓":"▶ あなたは先手（下側の駒）です")
+          : (playerLang==="en"?"▶ Gote (White) to move — your pieces are at the TOP ↑":"▶ あなたは後手（上側の駒）です")
+        }
+      </div>
       <div style={{fontSize:15,color:"#5a3c18",marginTop:3}}>
         {playerLang==="en"?tacCurPuzzleS.descEn:tacCurPuzzleS.descJa}
       </div>
