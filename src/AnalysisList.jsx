@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "./firebase.js";
 import { ref, get, set, remove } from "firebase/database";
 import { FB_PATH } from "./analysisEngine.js";
+import { addDeletedAnalysis } from "./AutoAnalyzer.jsx";
 import shogiOuImg from "./assets/shogi/ou.png";
 
 const serif = "'Cormorant Garamond','Zen Old Mincho',Georgia,serif";
@@ -126,6 +127,8 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
     setConfirmDelete(null);
     try {
       await remove(ref(db, `analyses/${playerName}/${gameId}`));
+      // Record in localStorage so AutoAnalyzer won't re-trigger for this game
+      addDeletedAnalysis(playerName, gameId);
       setAnalyses(prev => prev.filter(a => a.gameId !== gameId));
     } catch (e) { console.warn("delete failed:", e); }
     setDeleting(null);

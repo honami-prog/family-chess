@@ -4614,6 +4614,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsLoading, setTacticsLoading] = useState(false);
   const [tacticsError, setTacticsError] = useState(null);
   const [tacticsStatusMsg, setTacticsStatusMsg] = useState(null); // shown during 429 retry wait
+  const tacticsRestoredRef = useRef(false); // true during localStorage restore → skip initial fetch
   // AI mode
   const [vsAI, setVsAI] = useState(false);
   const [aiLevel, setAiLevel] = useState(3);
@@ -5225,9 +5226,36 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     throw new Error(errMsg);
   }, [playerLang]); // eslint-disable-line
 
+  // Restore chess tactics session from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('chess_tactics_session'));
+      if (saved?.puzzles?.length) {
+        tacticsRestoredRef.current = true;
+        setTacticsDiff(saved.diff ?? null);
+        setTacticsTheme(saved.theme ?? null);
+        setTacticsPuzzles(saved.puzzles);
+        setTacticsIdx(saved.idx ?? 0);
+        setTacticsMode(true);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save chess tactics session to localStorage whenever state changes
+  useEffect(() => {
+    if (!tacticsMode || !tacticsPuzzles.length) return;
+    try {
+      localStorage.setItem('chess_tactics_session', JSON.stringify({
+        diff: tacticsDiff, theme: tacticsTheme, puzzles: tacticsPuzzles, idx: tacticsIdx,
+      }));
+    } catch {}
+  }, [tacticsMode, tacticsDiff, tacticsTheme, tacticsPuzzles, tacticsIdx]);
+
   // Fetch first puzzle when tactics mode starts (or difficulty changes)
   useEffect(() => {
     if (!tacticsMode) return;
+    // Skip initial fetch when restoring from localStorage
+    if (tacticsRestoredRef.current) { tacticsRestoredRef.current = false; return; }
     setTacticsPuzzles([]);
     setTacticsIdx(0);
     setTacticsLoading(true);
@@ -5614,7 +5642,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <button onClick={handleTacticsNext} style={btnStyle}>⏭ {playerLang==="en"?"Skip":"スキップ"}</button>
       </>)}
       <button onClick={()=>setTacticsIdx(i=>Math.max(0,i-1))} disabled={tacticsIdx===0} style={{...btnStyle,opacity:tacticsIdx===0?0.4:1}}>◀</button>
-      <button onClick={()=>{ setTacticsMode(false); resetChess(); }} style={{...btnStyle,color:"#9a8878"}}>✕ {playerLang==="en"?"Exit":"終了"}</button>
+      <button onClick={()=>{ localStorage.removeItem('chess_tactics_session'); setTacticsMode(false); resetChess(); }} style={{...btnStyle,color:"#9a8878"}}>✕ {playerLang==="en"?"Exit":"終了"}</button>
     </div>
   ) : null;
 
@@ -5708,7 +5736,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <button onClick={handleTacticsNext} style={fsBtn}>⏭</button>
               </>)}
               <button onClick={()=>setTacticsIdx(i=>Math.max(0,i-1))} disabled={tacticsIdx===0} style={{...fsBtn,opacity:tacticsIdx===0?0.4:1}}>◀</button>
-              <button onClick={()=>{setTacticsMode(false);resetChess();}} style={{...fsBtn,opacity:0.7}}>✕</button>
+              <button onClick={()=>{localStorage.removeItem('chess_tactics_session');setTacticsMode(false);resetChess();}} style={{...fsBtn,opacity:0.7}}>✕</button>
             </div>}
           </div>
         </div>
@@ -5981,6 +6009,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [victoryModalSh, setVictoryModalSh] = useState(null);
   const shogiWorkerRef = useRef(null);
   const oppMoveStateRef = useRef(null); // 多手詰み用: 相手の自動応手に使うboard/cap
+  const shogiRestoreIdxRef = useRef(null); // localStorage復元時のpuzzle index
   // Use refs to avoid stale closures in async AI callbacks
   const vsAIRefSh = useRef(false);
   const aiLevelRefSh = useRef(3);
@@ -6335,6 +6364,28 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     oppMoveStateRef.current = null;
   }, []);
 
+  // Restore shogi tactics session from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('shogi_tactics_session'));
+      if (saved && saved.idxS != null) {
+        shogiRestoreIdxRef.current = saved.idxS;
+        setTacticsDiffS(saved.diffS ?? null);
+        setTacticsModeS(true);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save shogi tactics session to localStorage whenever state changes
+  useEffect(() => {
+    if (!tacticsModeS || !tacticsPuzzlesS.length) return;
+    try {
+      localStorage.setItem('shogi_tactics_session', JSON.stringify({
+        diffS: tacticsDiffS, idxS: tacticsIdxS,
+      }));
+    } catch {}
+  }, [tacticsModeS, tacticsDiffS, tacticsPuzzlesS, tacticsIdxS]);
+
   useEffect(() => {
     if (!tacticsModeS) return;
     setTacticsLoadingS(true);
@@ -6347,7 +6398,14 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         const list = tacticsDiffS ? data.filter(p => p.difficulty === tacticsDiffS) : data;
         if (list.length === 0) throw new Error(playerLang === 'en' ? 'No puzzles found for this difficulty.' : 'この難度の問題が見つかりません。');
         setTacticsPuzzlesS(list);
-        setTacticsIdxS(0);
+        // Restore saved puzzle index if coming back from a session
+        const restoreIdx = shogiRestoreIdxRef.current;
+        if (restoreIdx !== null) {
+          setTacticsIdxS(Math.min(restoreIdx, list.length - 1));
+          shogiRestoreIdxRef.current = null;
+        } else {
+          setTacticsIdxS(0);
+        }
         setTacticsLoadingS(false);
       })
       .catch(err => { setTacticsLoadingS(false); setTacticsErrorS(err.message); });
@@ -6678,7 +6736,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 ▶ {playerLang==="en"?"Next Puzzle":"次の問題"}
               </button>
             ) : (
-              <button onClick={()=>{ setTacticsModeS(false); resetShogi(); }}
+              <button onClick={()=>{ localStorage.removeItem('shogi_tactics_session'); setTacticsModeS(false); resetShogi(); }}
                 style={{...btnModS,background:"#c8a86a",color:"#fff",fontWeight:600,fontSize:16}}>
                 {playerLang==="en"?"Finish":"終了"}
               </button>
@@ -6775,7 +6833,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...btnStyleS,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
         <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...btnStyleS,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
       </>)}
-      <button onClick={()=>{ setTacticsModeS(false); resetShogi(); }} style={{...btnStyleS,color:"#9a8878"}}>✕ {playerLang==="en"?"Exit":"終了"}</button>
+      <button onClick={()=>{ localStorage.removeItem('shogi_tactics_session'); setTacticsModeS(false); resetShogi(); }} style={{...btnStyleS,color:"#9a8878"}}>✕ {playerLang==="en"?"Exit":"終了"}</button>
     </div>
   ) : null;
 
@@ -6863,7 +6921,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...fsBtn,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
                 <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...fsBtn,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
               </>)}
-              <button onClick={()=>{setTacticsModeS(false);resetShogi();}} style={{...fsBtn,opacity:0.7}}>✕</button>
+              <button onClick={()=>{localStorage.removeItem('shogi_tactics_session');setTacticsModeS(false);resetShogi();}} style={{...fsBtn,opacity:0.7}}>✕</button>
             </div>}
           </div>
         </div>

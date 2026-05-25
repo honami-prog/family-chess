@@ -6,6 +6,20 @@ import {
   FB_PATH, fbLoad, fbSave, fbCopyToUser,
 } from "./analysisEngine.js";
 
+// localStorage key for manually-deleted analysis IDs (per user: "playerName/gameId")
+export const DELETED_ANALYSES_KEY = 'deleted_analyses';
+
+export function getDeletedAnalyses() {
+  try { return new Set(JSON.parse(localStorage.getItem(DELETED_ANALYSES_KEY)) || []); } catch { return new Set(); }
+}
+export function addDeletedAnalysis(playerName, gameId) {
+  try {
+    const set = getDeletedAnalyses();
+    set.add(`${playerName}/${gameId}`);
+    localStorage.setItem(DELETED_ANALYSES_KEY, JSON.stringify([...set]));
+  } catch {}
+}
+
 /**
  * 終局したゲームを UI なしでバックグラウンド解析し Firebase に保存する。
  * Firebase にキャッシュが既にあれば何もしない。
@@ -19,6 +33,12 @@ export default function AutoAnalyzer({ game, gameType, playerName, onComplete, o
   useEffect(() => {
     const history = game.history || [];
     if (!history.length || !playerName) return;
+
+    // Skip games the user has manually deleted from the analysis list
+    if (getDeletedAnalyses().has(`${playerName}/${game.id}`)) {
+      console.log(`[AutoAnalyzer] skipping deleted analysis ${game.id}`);
+      return;
+    }
 
     const isChess = gameType === "chess";
     abortRef.current = false;
