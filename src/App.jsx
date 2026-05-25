@@ -133,6 +133,8 @@ const REACTIONS = ["❤️", "😂", "👏", "🎉", "😮", "Good move!", "Nice
 function AvatarIcon({ url, size = 36, name = "", noPreview = false, border }) {
   const [err, setErr] = useState(false);
   const [preview, setPreview] = useState(false);
+  // URLが変わったときにエラー状態をリセット（アバター変更後に再表示できるよう）
+  useEffect(() => { setErr(false); }, [url]);
   const sz = size + "px";
   const canPreview = !!url && !err && !noPreview;
   const borderStyle = border || "1px solid #c8b090";
@@ -5973,10 +5975,12 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsAttemptS, setTacticsAttemptS] = useState(0);
   const [tacticsLoadingS, setTacticsLoadingS] = useState(false);
   const [tacticsErrorS, setTacticsErrorS] = useState(null);
+  const [tacticsSolStepS, setTacticsSolStepS] = useState(0); // 多手詰み用: 現在の解答ステップ
   const [lastMoveSh, setLastMoveSh] = useState(null); // {from:[r,c], to:[r,c]} or {drop:true, to:[r,c]}
   const [checkAnnouncementSh, setCheckAnnouncementSh] = useState(null);
   const [victoryModalSh, setVictoryModalSh] = useState(null);
   const shogiWorkerRef = useRef(null);
+  const oppMoveStateRef = useRef(null); // 多手詰み用: 相手の自動応手に使うboard/cap
   // Use refs to avoid stale closures in async AI callbacks
   const vsAIRefSh = useRef(false);
   const aiLevelRefSh = useRef(3);
@@ -6138,9 +6142,10 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     // Shogi tactics mode check
     if (tacticsModeS) {
       if (tacticsResultS) return;
+      if (tacticsSolStepS % 2 === 1) return; // 相手の応手アニメーション中は入力ブロック
       const tacPuzzle = tacticsPuzzlesS[tacticsIdxS];
       if (!tacPuzzle) return;
-      const sol = tacPuzzle.solution?.[0];
+      const sol = tacPuzzle.solution?.[tacticsSolStepS]; // 現在のステップの正解手
       // Handle drop in hand: handled in onHandClick; here handle board moves
       if (dropSel) {
         const isLegal = legal.some(([lr,lc])=>lr===r&&lc===c);
@@ -6156,8 +6161,14 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             setCap(newCap);
             setBoard(nb); setDropSel(null); setSel(null); setLegal([]);
             setLastMoveSh({drop:true,to:[r,c]});
-            setTacticsResultS('correct');
-            saveShogiTacticsFb(tacPuzzle,'correct',tacticsHintUsedS,newAtt);
+            const isLastStep = tacticsSolStepS >= tacPuzzle.solution.length - 1;
+            if (isLastStep) {
+              setTacticsResultS('correct');
+              saveShogiTacticsFb(tacPuzzle,'correct',tacticsHintUsedS,newAtt);
+            } else {
+              oppMoveStateRef.current = {board: nb, cap: newCap};
+              setTacticsSolStepS(prev => prev + 1);
+            }
             return;
           } else {
             setDropSel(null); setLegal([]);
@@ -6176,6 +6187,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           if (isCorrect) {
             const nb = board.map(row=>[...row]);
             const movingPiece = board[sel.r][sel.c];
+            if (!movingPiece) { setSel(null); setLegal([]); return; } // null guard
             const newCap = {b:{...cap.b},w:{...cap.w}};
             if (board[r][c]) {
               const capType = board[r][c].type;
@@ -6183,12 +6195,18 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             }
             const shouldPromote = sol.promote || (!movingPiece.p && movingPiece.type!=="K" && movingPiece.type!=="G" &&
               ((movingPiece.color==="b" && r<=2)||(movingPiece.color==="w" && r>=6)));
-            nb[r][c] = shouldPromote ? {...movingPiece, p:true} : movingPiece;
+            nb[r][c] = shouldPromote ? {...movingPiece, p:true} : {...movingPiece};
             nb[sel.r][sel.c] = null;
             setCap(newCap); setBoard(nb); setSel(null); setLegal([]);
             setLastMoveSh({from:[sel.r,sel.c],to:[r,c]});
-            setTacticsResultS('correct');
-            saveShogiTacticsFb(tacPuzzle,'correct',tacticsHintUsedS,newAtt);
+            const isLastStep = tacticsSolStepS >= tacPuzzle.solution.length - 1;
+            if (isLastStep) {
+              setTacticsResultS('correct');
+              saveShogiTacticsFb(tacPuzzle,'correct',tacticsHintUsedS,newAtt);
+            } else {
+              oppMoveStateRef.current = {board: nb, cap: newCap};
+              setTacticsSolStepS(prev => prev + 1);
+            }
           } else {
             setSel(null); setLegal([]);
             setTacticsResultS('incorrect');
@@ -6313,6 +6331,8 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setTacticsHintUsedS(false);
     setTacticsShowAnswerS(false);
     setTacticsAttemptS(0);
+    setTacticsSolStepS(0);
+    oppMoveStateRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -6337,6 +6357,45 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     if (!tacticsModeS || !tacticsPuzzlesS.length) return;
     loadShogiTacticsPuzzle(tacticsPuzzlesS[tacticsIdxS]);
   }, [tacticsModeS, tacticsPuzzlesS, tacticsIdxS, loadShogiTacticsPuzzle]);
+
+  // 多手詰み用: 相手の自動応手 (奇数ステップ = 相手番)
+  useEffect(() => {
+    if (!tacticsModeS || tacticsSolStepS % 2 !== 1 || tacticsResultS) return;
+    const tacPuzzle = tacticsPuzzlesS[tacticsIdxS];
+    if (!tacPuzzle?.solution?.[tacticsSolStepS]) return;
+    const oppSol = tacPuzzle.solution[tacticsSolStepS];
+    const savedState = oppMoveStateRef.current;
+    if (!savedState) return;
+    const step = tacticsSolStepS;
+    const timer = setTimeout(() => {
+      const { board: prevBd, cap: prevCap } = savedState;
+      let nb, newCap;
+      if (oppSol.drop) {
+        nb = prevBd.map(row => [...row]);
+        nb[oppSol.to[0]][oppSol.to[1]] = { color: 'w', type: oppSol.drop, p: false };
+        newCap = { b: { ...prevCap.b }, w: { ...prevCap.w } };
+        const cnt = (newCap.w[oppSol.drop] || 0) - 1;
+        if (cnt <= 0) delete newCap.w[oppSol.drop]; else newCap.w[oppSol.drop] = cnt;
+      } else {
+        nb = prevBd.map(row => [...row]);
+        const oppPiece = prevBd[oppSol.from[0]]?.[oppSol.from[1]];
+        if (!oppPiece) { oppMoveStateRef.current = null; return; }
+        newCap = { b: { ...prevCap.b }, w: { ...prevCap.w } };
+        if (prevBd[oppSol.to[0]]?.[oppSol.to[1]]) {
+          const capType = prevBd[oppSol.to[0]][oppSol.to[1]].type;
+          newCap.w[capType] = (newCap.w[capType] || 0) + 1;
+        }
+        nb[oppSol.to[0]][oppSol.to[1]] = oppSol.promote ? { ...oppPiece, p: true } : { ...oppPiece };
+        nb[oppSol.from[0]][oppSol.from[1]] = null;
+      }
+      setBoard(nb);
+      setCap(newCap);
+      setLastMoveSh(oppSol.drop ? { drop: true, to: oppSol.to } : { from: oppSol.from, to: oppSol.to });
+      oppMoveStateRef.current = null;
+      setTacticsSolStepS(step + 1);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [tacticsModeS, tacticsSolStepS, tacticsPuzzlesS, tacticsIdxS, tacticsResultS]);
 
   const saveShogiTacticsFb = useCallback(async (puzzle, result, hintUsed, attemptCount) => {
     if (!playerName || !puzzle) return;
@@ -6383,10 +6442,13 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     const isLastFrom = lastMoveSh && !lastMoveSh.drop && lastMoveSh.from && lastMoveSh.from[0]===r && lastMoveSh.from[1]===c;
     const isLastTo = lastMoveSh && lastMoveSh.to && lastMoveSh.to[0]===r && lastMoveSh.to[1]===c;
     const tacPzS = tacticsModeS && tacticsPuzzlesS[tacticsIdxS];
+    // 多手詰み対応: 現在のプレイヤー手番ステップ（偶数）の解答マスを表示
+    const curPlayerStep = tacticsSolStepS % 2 === 0 ? tacticsSolStepS : tacticsSolStepS - 1;
+    const curSolS = tacPzS?.solution?.[curPlayerStep];
     const isHintSqS = tacticsModeS && tacticsHintUsedS && !tacticsResultS && tacPzS?.hint && tacPzS.hint[0]===r && tacPzS.hint[1]===c;
-    const isAnsSqS = tacticsModeS && tacticsShowAnswerS && tacPzS?.solution?.[0] && !tacPzS.solution[0].drop && (
-      (tacPzS.solution[0].from?.[0]===r && tacPzS.solution[0].from?.[1]===c) ||
-      (tacPzS.solution[0].to[0]===r && tacPzS.solution[0].to[1]===c)
+    const isAnsSqS = tacticsModeS && tacticsShowAnswerS && curSolS && !curSolS.drop && (
+      (curSolS.from?.[0]===r && curSolS.from?.[1]===c) ||
+      (curSolS.to[0]===r && curSolS.to[1]===c)
     );
     const pieceRotate = piece
       ? (boardFlipped ? (piece.color==="b" ? "rotate(180deg)" : "none") : (piece.color==="w" ? "rotate(180deg)" : "none"))

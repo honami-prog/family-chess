@@ -129,12 +129,12 @@
       [null,null,null,{"t":"B","c":"w","p":false},null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
+      [null,null,null,null,null,null,{"t":"B","c":"b","p":false},null,null],
       [null,null,null,null,null,null,null,null,null],
-      [null,null,null,null,null,null,null,null,null],
-      [null,null,null,null,{"t":"K","c":"b","p":false},null,{"t":"B","c":"b","p":false},null,null]
+      [null,null,null,null,{"t":"K","c":"b","p":false},null,null,null,null]
     ],
     "hand": {"b":{},"w":{}},
-    "solution": [{"from":[8,6],"to":[3,3]}],
+    "solution": [{"from":[6,6],"to":[3,3]}],
     "hint": [3,3]
   },
   {
@@ -188,37 +188,37 @@
     "difficulty": "Easy",
     "titleJa": "金の詰み",
     "titleEn": "Gold Checkmate",
-    "descJa": "先手番です。金を打って詰ませてください。",
-    "descEn": "Black to move. Drop gold for checkmate.",
+    "descJa": "先手番です。金を打って詰ませてください。飛車が両脇を守っています。",
+    "descEn": "Black to move. Drop gold for checkmate. Rooks guard both sides.",
     "turn": "b",
     "board": [
       [null,null,null,null,{"t":"K","c":"w","p":false},null,null,null,null],
+      [null,null,null,{"t":"R","c":"b","p":false},null,{"t":"R","c":"b","p":false},null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
-      [null,null,null,null,{"t":"R","c":"b","p":false},null,null,null,null],
       [null,null,null,null,{"t":"K","c":"b","p":false},null,null,null,null]
     ],
     "hand": {"b":{"G":1},"w":{}},
-    "solution": [{"from":[7,4],"to":[0,4]},{"from":[0,4],"to":[0,3]},{"drop":"G","to":[0,4]}],
-    "hint": [0,4]
+    "solution": [{"drop":"G","to":[1,4]}],
+    "hint": [1,4]
   },
   {
     "id": "shogi_010",
     "difficulty": "Normal",
     "titleJa": "銀の活用",
     "titleEn": "Silver Tactics",
-    "descJa": "先手番です。銀で有利になってください。",
-    "descEn": "Black to move. Use silver to gain material advantage.",
+    "descJa": "先手番です。銀で飛車をタダで取れます。",
+    "descEn": "Black to move. Use silver to capture the rook for free.",
     "turn": "b",
     "board": [
       [null,null,null,null,{"t":"K","c":"w","p":false},null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
-      [null,null,null,{"t":"R","c":"w","p":false},null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
+      [null,null,null,{"t":"R","c":"w","p":false},null,null,null,null,null],
       [null,null,{"t":"S","c":"b","p":false},null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
       [null,null,null,null,null,null,null,null,null],
@@ -226,7 +226,7 @@
       [null,null,null,null,{"t":"K","c":"b","p":false},null,null,null,null]
     ],
     "hand": {"b":{},"w":{}},
-    "solution": [{"from":[4,2],"to":[2,3]}],
-    "hint": [2,3]
+    "solution": [{"from":[4,2],"to":[3,3]}],
+    "hint": [3,3]
   }
 ]
