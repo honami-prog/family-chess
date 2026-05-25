@@ -4611,7 +4611,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsAttempt, setTacticsAttempt] = useState(0);
   const [tacticsLoading, setTacticsLoading] = useState(false);
   const [tacticsError, setTacticsError] = useState(null);
-  const [tacticsPrefetch, setTacticsPrefetch] = useState(null);
+  const [tacticsStatusMsg, setTacticsStatusMsg] = useState(null); // shown during 429 retry wait
   // AI mode
   const [vsAI, setVsAI] = useState(false);
   const [aiLevel, setAiLevel] = useState(3);
@@ -5120,8 +5120,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // ── Lichess puzzle fetcher ────────────────────────────────────────
   const LICHESS_DIFF = { Easy: 'easiest', Normal: 'normal', Hard: 'hardest' };
   const SEEN_KEY = 'chess_tactics_seen';
+  const PUZZLE_CACHE_KEY = 'chess_tactics_cache'; // last 5 puzzles for offline fallback
 
-  const fetchTacticsPuzzle = useCallback(async (diff, theme) => {
+  const fetchTacticsPuzzle = useCallback(async (diff, theme, { onStatus } = {}) => {
     const lichessDiff = LICHESS_DIFF[diff];
     const base = 'https://lichess.org/api/puzzle/next';
     const params = new URLSearchParams();
@@ -5129,37 +5130,65 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     if (theme) params.set('themes', theme);
     const url = params.toString() ? `${base}?${params}` : base;
     const seen = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'));
+    let rate429 = 0;
 
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const resp = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      let resp;
+      try {
+        resp = await fetch(url, { headers: { Accept: 'application/json' } });
+      } catch (e) {
+        // Network error – fall through to cache
+        break;
+      }
+
+      // Rate-limit handling: wait 3 s and retry (max 3 times)
+      if (resp.status === 429) {
+        rate429++;
+        if (rate429 >= 3) break;
+        if (onStatus) onStatus(playerLang === 'en' ? 'Rate limited – retrying in 3 s…' : '少し待ってから再読み込みします...');
+        await new Promise(r => setTimeout(r, 3000));
+        if (onStatus) onStatus(null);
+        continue;
+      }
+
+      if (!resp.ok) break; // other HTTP error – fall through to cache
+
       const data = await resp.json();
       const p = data.puzzle;
-      if (seen.has(p.id)) { await new Promise(r => setTimeout(r, 300)); continue; }
+      if (!p) break;
+
+      if (seen.has(p.id)) {
+        // After 5 consecutive seen hits, auto-reset the list so we never get stuck
+        if (attempt >= 4) {
+          seen.clear();
+          localStorage.removeItem(SEEN_KEY);
+        }
+        await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
 
       // FEN: use puzzle.fen if available, otherwise reconstruct from PGN
       let fen = p.fen;
       if (!fen && data.game?.pgn && p.initialPly != null) {
         const chess = new Chess();
         const tokens = data.game.pgn.trim().split(/\s+/).filter(t => !/^\d+\./.test(t));
-        // initialPly is 0-indexed: play moves at indices 0..initialPly (inclusive)
         for (let i = 0; i <= p.initialPly && i < tokens.length; i++) {
           try { chess.move(tokens[i], { strict: false }); } catch { break; }
         }
         fen = chess.fen();
       }
-      if (!fen) throw new Error('FENを取得できませんでした');
+      if (!fen) break; // bad data – fall through to cache
 
       const turn = fen.split(' ')[1]; // 'w' or 'b'
       const firstMove = p.solution?.[0] || '';
       const hint = firstMove.length >= 4
         ? [8 - parseInt(firstMove[3]), firstMove.charCodeAt(2) - 97] : null;
 
-      // Record as seen (keep last 200, persisted across sessions)
+      // Record as seen (keep last 200)
       seen.add(p.id);
       localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
 
-      return {
+      const puzzle = {
         id: `lichess_${p.id}`,
         difficulty: diff || 'Normal',
         titleJa: diff === 'Easy' ? '初級タクティクス' : diff === 'Hard' ? '上級タクティクス' : 'タクティクス',
@@ -5168,21 +5197,51 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         descEn: turn === 'w' ? 'White to move. Find the best move.' : 'Black to move. Find the best move.',
         turn, fen, moves: p.solution, rating: p.rating, themes: p.themes || [], hint,
       };
+
+      // Save to puzzle cache (keep last 5 for offline fallback)
+      try {
+        const cache = JSON.parse(localStorage.getItem(PUZZLE_CACHE_KEY) || '[]');
+        cache.push(puzzle);
+        localStorage.setItem(PUZZLE_CACHE_KEY, JSON.stringify(cache.slice(-5)));
+      } catch (e) { /* storage full – ignore */ }
+
+      return puzzle;
     }
-    throw new Error('新しい問題を取得できませんでした。再試行してください。');
-  }, []); // eslint-disable-line
+
+    // API completely failed – try cache fallback
+    try {
+      const cache = JSON.parse(localStorage.getItem(PUZZLE_CACHE_KEY) || '[]');
+      if (cache.length > 0) {
+        const fallback = cache[Math.floor(Math.random() * cache.length)];
+        return { ...fallback, fromCache: true };
+      }
+    } catch (e) { /* ignore */ }
+
+    const errMsg = rate429 >= 3
+      ? (playerLang === 'en' ? 'Rate limit reached. Please wait a moment and retry.' : 'APIのレート制限に達しました。しばらく待ってから再試行してください。')
+      : (playerLang === 'en' ? 'Failed to load puzzle. Please retry.' : '新しい問題を取得できませんでした。再試行してください。');
+    throw new Error(errMsg);
+  }, [playerLang]); // eslint-disable-line
 
   // Fetch first puzzle when tactics mode starts (or difficulty changes)
   useEffect(() => {
     if (!tacticsMode) return;
     setTacticsPuzzles([]);
     setTacticsIdx(0);
-    setTacticsPrefetch(null);
     setTacticsLoading(true);
     setTacticsError(null);
-    fetchTacticsPuzzle(tacticsDiff, tacticsTheme)
-      .then(puzzle => { setTacticsPuzzles([puzzle]); setTacticsLoading(false); })
-      .catch(err => { setTacticsLoading(false); setTacticsError(err.message); });
+    setTacticsStatusMsg(null);
+    fetchTacticsPuzzle(tacticsDiff, tacticsTheme, {
+      onStatus: msg => setTacticsStatusMsg(msg),
+    }).then(puzzle => {
+      setTacticsPuzzles([puzzle]);
+      setTacticsLoading(false);
+      setTacticsStatusMsg(null);
+    }).catch(err => {
+      setTacticsLoading(false);
+      setTacticsStatusMsg(null);
+      setTacticsError(err.message);
+    });
   }, [tacticsMode, tacticsDiff, tacticsTheme, fetchTacticsPuzzle]);
 
   // Load puzzle onto board when current puzzle changes
@@ -5192,34 +5251,27 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     if (cur) loadTacticsPuzzle(cur);
   }, [tacticsMode, tacticsPuzzles, tacticsIdx, loadTacticsPuzzle]);
 
-  // Prefetch next puzzle in background after result arrives
-  useEffect(() => {
-    if (!tacticsMode || !tacticsResult || tacticsPrefetch) return;
-    fetchTacticsPuzzle(tacticsDiff, tacticsTheme)
-      .then(p => setTacticsPrefetch(p))
-      .catch(() => {}); // silent – will fetch on demand
-  }, [tacticsResult, tacticsMode, tacticsDiff, tacticsTheme, tacticsPrefetch, fetchTacticsPuzzle]);
+  // (prefetch removed – fetching on-demand in handleTacticsNext avoids rate-limit bursts)
 
   // ── Go to next puzzle ─────────────────────────────────────────────
   const handleTacticsNext = useCallback(() => {
-    // If we already have a prefetched puzzle, use it instantly
-    if (tacticsPrefetch) {
-      setTacticsPuzzles(prev => [...prev, tacticsPrefetch]);
-      setTacticsIdx(prev => prev + 1);
-      setTacticsPrefetch(null);
-      return;
-    }
-    // Otherwise fetch on demand
     setTacticsLoading(true);
     setTacticsError(null);
-    fetchTacticsPuzzle(tacticsDiff, tacticsTheme)
-      .then(p => {
-        setTacticsPuzzles(prev => [...prev, p]);
-        setTacticsIdx(prev => prev + 1);
-        setTacticsLoading(false);
-      })
-      .catch(err => { setTacticsLoading(false); setTacticsError(err.message); });
-  }, [tacticsPrefetch, tacticsDiff, tacticsTheme, fetchTacticsPuzzle]);
+    setTacticsStatusMsg(null);
+    setTacticsResult(null);
+    fetchTacticsPuzzle(tacticsDiff, tacticsTheme, {
+      onStatus: msg => setTacticsStatusMsg(msg),
+    }).then(p => {
+      setTacticsPuzzles(prev => [...prev, p]);
+      setTacticsIdx(prev => prev + 1);
+      setTacticsLoading(false);
+      setTacticsStatusMsg(null);
+    }).catch(err => {
+      setTacticsLoading(false);
+      setTacticsStatusMsg(null);
+      setTacticsError(err.message);
+    });
+  }, [tacticsDiff, tacticsTheme, fetchTacticsPuzzle]);
 
   const saveTacticsFb = useCallback(async (puzzle, result, hintUsed, attemptCount) => {
     if (!playerName || !puzzle) return;
@@ -5532,14 +5584,21 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",padding:"6px 0"}}>
       {tacticsError ? (<>
         <span style={{fontFamily:serif,fontSize:14,color:"#c04040",alignSelf:"center"}}>{playerLang==="en"?"Failed to load puzzle":"問題を読み込めませんでした"}</span>
-        <button onClick={()=>{ setTacticsError(null); setTacticsLoading(true); fetchTacticsPuzzle(tacticsDiff, tacticsTheme).then(p=>{setTacticsPuzzles(prev=>{const arr=[...prev];arr[tacticsIdx]=p;return arr;});setTacticsLoading(false);}).catch(e=>{setTacticsLoading(false);setTacticsError(e.message);}); }} style={{...btnStyle,background:"#c8a86a",color:"#fff",border:"none"}}>{playerLang==="en"?"Retry":"再試行"}</button>
+        <button onClick={()=>{
+          setTacticsError(null); setTacticsLoading(true); setTacticsStatusMsg(null); setTacticsResult(null);
+          fetchTacticsPuzzle(tacticsDiff, tacticsTheme, { onStatus: msg => setTacticsStatusMsg(msg) })
+            .then(p=>{ setTacticsPuzzles(prev=>[...prev,p]); setTacticsIdx(prev=>prev+1); setTacticsLoading(false); setTacticsStatusMsg(null); })
+            .catch(e=>{ setTacticsLoading(false); setTacticsStatusMsg(null); setTacticsError(e.message); });
+        }} style={{...btnStyle,background:"#c8a86a",color:"#fff",border:"none"}}>{playerLang==="en"?"Retry":"再試行"}</button>
       </>) : tacticsLoading ? (<>
-        <span style={{fontFamily:serif,fontSize:15,color:"#7a5838",alignSelf:"center"}}>{playerLang==="en"?"Loading…":"読み込み中…"}</span>
+        <span style={{fontFamily:serif,fontSize:15,color:"#7a5838",alignSelf:"center"}}>
+          {tacticsStatusMsg || (playerLang==="en"?"Loading…":"読み込み中…")}
+        </span>
       </>) : tacticsResult==='correct' ? (<>
         <span style={{fontSize:22}}>✅</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#3a7a3a",alignSelf:"center"}}>{playerLang==="en"?"Correct!":"正解！"}</span>
         <button onClick={handleTacticsNext} style={{...btnStyle,background:"#c8a86a",color:"#fff",border:"none"}}>
-          {tacticsPrefetch?`▶ ${playerLang==="en"?"Next":"次の問題"}`:`▶ ${playerLang==="en"?"Next":"次の問題"}${playerLang==="en"?"":" ⏳"}`}
+          ▶ {playerLang==="en"?"Next":"次の問題"}
         </button>
       </>) : tacticsResult==='incorrect' ? (<>
         <span style={{fontSize:22}}>❌</span>
@@ -5622,9 +5681,16 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             {tacticsMode && <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center",marginTop:4}}>
               {tacticsError ? (<>
                 <span style={{color:"#f08080",fontFamily:serif,fontSize:13,alignSelf:"center"}}>{playerLang==="en"?"Load failed":"読込失敗"}</span>
-                <button onClick={()=>{ setTacticsError(null); setTacticsLoading(true); fetchTacticsPuzzle(tacticsDiff, tacticsTheme).then(p=>{setTacticsPuzzles(prev=>{const arr=[...prev];arr[tacticsIdx]=p;return arr;});setTacticsLoading(false);}).catch(e=>{setTacticsLoading(false);setTacticsError(e.message);}); }} style={fsBtn}>{playerLang==="en"?"Retry":"再試行"}</button>
+                <button onClick={()=>{
+                  setTacticsError(null); setTacticsLoading(true); setTacticsStatusMsg(null); setTacticsResult(null);
+                  fetchTacticsPuzzle(tacticsDiff, tacticsTheme, { onStatus: msg => setTacticsStatusMsg(msg) })
+                    .then(p=>{ setTacticsPuzzles(prev=>[...prev,p]); setTacticsIdx(prev=>prev+1); setTacticsLoading(false); setTacticsStatusMsg(null); })
+                    .catch(e=>{ setTacticsLoading(false); setTacticsStatusMsg(null); setTacticsError(e.message); });
+                }} style={fsBtn}>{playerLang==="en"?"Retry":"再試行"}</button>
               </>) : tacticsLoading ? (
-                <span style={{color:"rgba(255,255,255,0.7)",fontFamily:serif,fontSize:14,alignSelf:"center"}}>{playerLang==="en"?"Loading…":"読み込み中…"}</span>
+                <span style={{color:"rgba(255,255,255,0.7)",fontFamily:serif,fontSize:14,alignSelf:"center"}}>
+                  {tacticsStatusMsg || (playerLang==="en"?"Loading…":"読み込み中…")}
+                </span>
               ) : tacticsResult==='correct' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>✅</span>
                 <span style={{color:"#7ef07e",fontFamily:serif,fontSize:14,alignSelf:"center"}}>{playerLang==="en"?"Correct!":"正解！"}</span>
@@ -5905,6 +5971,8 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsShowAnswerS, setTacticsShowAnswerS] = useState(false);
   const [tacticsDiffSelectS, setTacticsDiffSelectS] = useState(false);
   const [tacticsAttemptS, setTacticsAttemptS] = useState(0);
+  const [tacticsLoadingS, setTacticsLoadingS] = useState(false);
+  const [tacticsErrorS, setTacticsErrorS] = useState(null);
   const [lastMoveSh, setLastMoveSh] = useState(null); // {from:[r,c], to:[r,c]} or {drop:true, to:[r,c]}
   const [checkAnnouncementSh, setCheckAnnouncementSh] = useState(null);
   const [victoryModalSh, setVictoryModalSh] = useState(null);
@@ -6249,15 +6317,21 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
 
   useEffect(() => {
     if (!tacticsModeS) return;
+    setTacticsLoadingS(true);
+    setTacticsErrorS(null);
+    setTacticsPuzzlesS([]);
+    setTacticsIdxS(0);
     fetch('/puzzles/shogi.json')
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => {
         const list = tacticsDiffS ? data.filter(p => p.difficulty === tacticsDiffS) : data;
+        if (list.length === 0) throw new Error(playerLang === 'en' ? 'No puzzles found for this difficulty.' : 'この難度の問題が見つかりません。');
         setTacticsPuzzlesS(list);
         setTacticsIdxS(0);
+        setTacticsLoadingS(false);
       })
-      .catch(() => setTacticsPuzzlesS([]));
-  }, [tacticsModeS, tacticsDiffS]);
+      .catch(err => { setTacticsLoadingS(false); setTacticsErrorS(err.message); });
+  }, [tacticsModeS, tacticsDiffS, playerLang]);
 
   useEffect(() => {
     if (!tacticsModeS || !tacticsPuzzlesS.length) return;
@@ -6606,21 +6680,39 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
 
   const tacticsControlsElS = tacticsModeS ? (
     <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",padding:"6px 0"}}>
-      {tacticsResultS==='correct' ? (<>
+      {tacticsErrorS ? (<>
+        <span style={{fontFamily:serif,fontSize:14,color:"#c04040",alignSelf:"center"}}>{tacticsErrorS}</span>
+        <button onClick={()=>{
+          setTacticsErrorS(null); setTacticsLoadingS(true);
+          fetch('/puzzles/shogi.json').then(r=>r.json()).then(data=>{
+            const list=tacticsDiffS?data.filter(p=>p.difficulty===tacticsDiffS):data;
+            setTacticsPuzzlesS(list); setTacticsIdxS(0); setTacticsLoadingS(false);
+          }).catch(e=>{setTacticsLoadingS(false);setTacticsErrorS(e.message);});
+        }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>{playerLang==="en"?"Retry":"再試行"}</button>
+      </>) : tacticsLoadingS ? (<>
+        <span style={{fontFamily:serif,fontSize:15,color:"#7a5838",alignSelf:"center"}}>{playerLang==="en"?"Loading…":"読み込み中…"}</span>
+      </>) : tacticsResultS==='correct' ? (<>
         <span style={{fontSize:22}}>✅</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#3a7a3a",alignSelf:"center"}}>{playerLang==="en"?"Correct!":"正解！"}</span>
-        {tacticsIdxS < tacticsPuzzlesS.length-1 && <button onClick={()=>setTacticsIdxS(i=>i+1)} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>}
+        {tacticsIdxS < tacticsPuzzlesS.length-1
+          ? <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>i+1); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
+          : <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(0); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>↺ {playerLang==="en"?"Start Over":"最初から"}</button>
+        }
       </>) : tacticsResultS==='incorrect' ? (<>
         <span style={{fontSize:22}}>❌</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#c04040",alignSelf:"center"}}>{playerLang==="en"?"Incorrect":"不正解"}</span>
         <button onClick={()=>{ setTacticsResultS(null); loadShogiTacticsPuzzle(tacCurPuzzleS); }} style={btnStyleS}>{playerLang==="en"?"Retry":"もう一度"}</button>
         <button onClick={()=>{ setTacticsResultS(null); setTacticsShowAnswerS(true); }} style={btnStyleS}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
+        <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1)); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
       </>) : (<>
         <button onClick={()=>setTacticsHintUsedS(true)} disabled={tacticsHintUsedS} style={{...btnStyleS,opacity:tacticsHintUsedS?0.5:1}}>{playerLang==="en"?"Hint 💡":"ヒント 💡"}</button>
         <button onClick={()=>setTacticsShowAnswerS(true)} style={btnStyleS}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
+        <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...btnStyleS,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>⏭ {playerLang==="en"?"Skip":"スキップ"}</button>
       </>)}
-      <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...btnStyleS,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
-      <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...btnStyleS,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
+      {!tacticsErrorS && !tacticsLoadingS && (<>
+        <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...btnStyleS,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
+        <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...btnStyleS,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
+      </>)}
       <button onClick={()=>{ setTacticsModeS(false); resetShogi(); }} style={{...btnStyleS,color:"#9a8878"}}>✕ {playerLang==="en"?"Exit":"終了"}</button>
     </div>
   ) : null;
@@ -6677,20 +6769,38 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             {boardEl}
             <ShogiHandArea color="w"/>
             {tacticsModeS && <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center",marginTop:4}}>
-              {tacticsResultS==='correct' ? (<>
+              {tacticsErrorS ? (<>
+                <span style={{color:"#f08080",fontFamily:serif,fontSize:13,alignSelf:"center"}}>{tacticsErrorS}</span>
+                <button onClick={()=>{
+                  setTacticsErrorS(null); setTacticsLoadingS(true);
+                  fetch('/puzzles/shogi.json').then(r=>r.json()).then(data=>{
+                    const list=tacticsDiffS?data.filter(p=>p.difficulty===tacticsDiffS):data;
+                    setTacticsPuzzlesS(list); setTacticsIdxS(0); setTacticsLoadingS(false);
+                  }).catch(e=>{setTacticsLoadingS(false);setTacticsErrorS(e.message);});
+                }} style={fsBtn}>{playerLang==="en"?"Retry":"再試行"}</button>
+              </>) : tacticsLoadingS ? (
+                <span style={{color:"rgba(255,255,255,0.7)",fontFamily:serif,fontSize:14,alignSelf:"center"}}>{playerLang==="en"?"Loading…":"読み込み中…"}</span>
+              ) : tacticsResultS==='correct' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>✅</span>
                 <span style={{color:"#7ef07e",fontFamily:serif,fontSize:14,alignSelf:"center"}}>{playerLang==="en"?"Correct!":"正解！"}</span>
-                {tacticsIdxS<tacticsPuzzlesS.length-1&&<button onClick={()=>setTacticsIdxS(i=>i+1)} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶ {playerLang==="en"?"Next":"次"}</button>}
+                {tacticsIdxS<tacticsPuzzlesS.length-1
+                  ? <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>i+1);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶ {playerLang==="en"?"Next":"次"}</button>
+                  : <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(0);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>↺ {playerLang==="en"?"Restart":"最初から"}</button>
+                }
               </>) : tacticsResultS==='incorrect' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>❌</span>
                 <button onClick={()=>{setTacticsResultS(null);loadShogiTacticsPuzzle(tacCurPuzzleS);}} style={fsBtn}>{playerLang==="en"?"Retry":"もう一度"}</button>
                 <button onClick={()=>{setTacticsResultS(null);setTacticsShowAnswerS(true);}} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
+                <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1));}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶</button>
               </>) : (<>
                 <button onClick={()=>setTacticsHintUsedS(true)} disabled={tacticsHintUsedS} style={{...fsBtn,opacity:tacticsHintUsedS?0.5:1}}>💡</button>
                 <button onClick={()=>setTacticsShowAnswerS(true)} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
+                <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...fsBtn,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>⏭</button>
               </>)}
-              <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...fsBtn,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
-              <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...fsBtn,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
+              {!tacticsErrorS && !tacticsLoadingS && (<>
+                <button onClick={()=>setTacticsIdxS(i=>Math.max(0,i-1))} disabled={tacticsIdxS===0} style={{...fsBtn,opacity:tacticsIdxS===0?0.4:1}}>◀</button>
+                <button onClick={()=>setTacticsIdxS(i=>Math.min(tacticsPuzzlesS.length-1,i+1))} disabled={tacticsIdxS>=tacticsPuzzlesS.length-1} style={{...fsBtn,opacity:tacticsIdxS>=tacticsPuzzlesS.length-1?0.4:1}}>▶</button>
+              </>)}
               <button onClick={()=>{setTacticsModeS(false);resetShogi();}} style={{...fsBtn,opacity:0.7}}>✕</button>
             </div>}
           </div>
