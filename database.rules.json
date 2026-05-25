@@ -86,6 +86,13 @@
     // ─── UI翻訳キャッシュ ─────────────────────────────────────
     "uiTranslations": {
       ".write": "!data.exists() || root.child('members').exists()"
+    },
+
+    // ─── ゲームリアクション（一時データ：相手へのアニメーション送信用）
+    "gameReactions": {
+      "$gameId": {
+        ".write": "root.child('members').exists()"
+      }
     }
   }
 }

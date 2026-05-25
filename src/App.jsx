@@ -79,6 +79,56 @@ const PIECE_SCALE = {
 };
 
 
+// ── キッズヒント：駒名 & メッセージ生成 ──────────────────────────────
+const PIECE_NAMES = {
+  P: { ja: "ポーン",     en: "Pawn"   },
+  N: { ja: "ナイト",     en: "Knight" },
+  B: { ja: "ビショップ", en: "Bishop" },
+  R: { ja: "ルーク",     en: "Rook"   },
+  Q: { ja: "クイーン",   en: "Queen"  },
+  K: { ja: "キング",     en: "King"   },
+};
+function getKidsHintMsg(targetType, attackers, isInCheck, lang) {
+  const L = lang === "en" ? "en" : "ja";
+  const tgt = PIECE_NAMES[targetType]?.[L] || targetType;
+  if (isInCheck && targetType === "K") {
+    return L === "en"
+      ? "Your King is in check! Protect the King first!"
+      : "王様がチェックされてるよ！まず王様を守って！";
+  }
+  if (!attackers.length) return null;
+  if (attackers.length > 1) {
+    return L === "en"
+      ? `Your ${tgt} is targeted by ${attackers.length} pieces! Danger!`
+      : `${tgt}が${attackers.length}つの駒から狙われてるよ！危険！`;
+  }
+  const atk = attackers[0];
+  const coord = `${String.fromCharCode(97 + atk.c)}${8 - atk.r}`; // e.g. "e4"
+  if (L === "en") {
+    const msgs = {
+      P: `Your ${tgt} is targeted by the Pawn at ${coord}!`,
+      N: `Your ${tgt} is targeted by the Knight at ${coord} in an L-shape!`,
+      B: `Your ${tgt} is targeted by the Bishop at ${coord} diagonally!`,
+      R: `Your ${tgt} is targeted by the Rook at ${coord} in a straight line!`,
+      Q: `Your ${tgt} is targeted by the Queen at ${coord}! Watch out!`,
+      K: `Your ${tgt} is targeted by the opponent's King!`,
+    };
+    return msgs[atk.type] || `Your ${tgt} is in danger!`;
+  }
+  const msgs = {
+    P: `${tgt}が、${coord}のポーンに狙われてるよ！`,
+    N: `${tgt}が、${coord}のナイトにL字で狙われてるよ！`,
+    B: `${tgt}が、${coord}のビショップに斜めから狙われてるよ！`,
+    R: `${tgt}が、${coord}のルークに縦横から狙われてるよ！`,
+    Q: `${tgt}が、${coord}のクイーンに狙われてるよ！気をつけて！`,
+    K: `${tgt}が、相手のキングに狙われてるよ！`,
+  };
+  return msgs[atk.type] || `${tgt}が危ないよ！`;
+}
+
+// ── リアクション定義 ──────────────────────────────────────────────
+const REACTIONS = ["❤️", "😂", "👏", "🎉", "😮", "Good move!", "Nice game!"];
+
 // アバターアイコン共通コンポーネント（円形・エラー時は👤フォールバック・タップで拡大）
 function AvatarIcon({ url, size = 36, name = "", noPreview = false, border }) {
   const [err, setErr] = useState(false);
@@ -760,6 +810,16 @@ function Board({ game, onUpdate, myColor, rotateTopPieces, isKids, playerLang, f
       if (effectiveMyColor === null) return;
       if (effectiveMyColor !== turn) return;
     }
+    // キッズヒント: 脅かされた自駒を初回タップしたとき理由を表示
+    if (showKidsHints && !sel) {
+      const pc = board[r][c];
+      const myCol = myColor || turn;
+      const key = `${r},${c}`;
+      if (pc?.color === myCol && attackersMap[key]) {
+        const msg = getKidsHintMsg(pc.type, attackersMap[key], inCheck(board, myCol), playerLang);
+        if (msg) showKidsHintBubble(msg);
+      }
+    }
     const rules = game.rules || { castling:true, promotion:true, enPassant:true };
     const castling = castlingFromHistory(history);
     const epSquare = game.epSquare || null;
@@ -907,6 +967,33 @@ function Board({ game, onUpdate, myColor, rotateTopPieces, isKids, playerLang, f
     return threatened;
   }, [board, showKidsHints, myColor, turn]);
 
+  // キッズヒント: 各脅かされたマスの攻撃者リスト {key: [{r,c,type},...]}
+  const attackersMap = useMemo(() => {
+    if (!showKidsHints) return {};
+    const myCol = myColor || turn;
+    const oppCol = myCol === "w" ? "b" : "w";
+    const map = {};
+    for (let r = 0; r < 8; r++)
+      for (let c = 0; c < 8; c++)
+        if (board[r][c]?.color === oppCol)
+          rawMoves(board, r, c).forEach(([nr, nc]) => {
+            if (board[nr][nc]?.color === myCol) {
+              const key = `${nr},${nc}`;
+              if (!map[key]) map[key] = [];
+              map[key].push({ r, c, type: board[r][c].type });
+            }
+          });
+    return map;
+  }, [board, showKidsHints, myColor, turn]);
+
+  const [kidsHintBubble, setKidsHintBubble] = useState(null);
+  const kidsHintTimerRef = useRef(null);
+  const showKidsHintBubble = (msg) => {
+    if (kidsHintTimerRef.current) clearTimeout(kidsHintTimerRef.current);
+    setKidsHintBubble({ msg, key: Date.now() });
+    kidsHintTimerRef.current = setTimeout(() => setKidsHintBubble(null), 3000);
+  };
+
   const handleTouchStart = (r, c, pc) => {
     if (!isKids || !pc) return;
     touchTimer.current = setTimeout(() => setPieceInfo({...pc, r, c}), 500);
@@ -934,6 +1021,20 @@ function Board({ game, onUpdate, myColor, rotateTopPieces, isKids, playerLang, f
       padding:"14px 14px 0 14px",
       boxShadow: flat ? "none" : "0 6px 24px rgba(60,40,20,0.20), inset 0 1px 2px rgba(255,230,180,0.20)",
     }}>
+      {/* キッズヒントバブル */}
+      {kidsHintBubble && (
+        <div key={kidsHintBubble.key} style={{
+          position:"absolute", left:"50%", top:6, zIndex:50, pointerEvents:"none",
+          background:"#fffbe6", border:"2.5px solid #f0c040", borderRadius:18,
+          padding:"9px 18px 9px 14px", maxWidth:"90%", whiteSpace:"pre-wrap",
+          textAlign:"center", fontSize:"clamp(13px,3.2vw,17px)", color:"#5a3a10", lineHeight:1.5,
+          fontFamily:"'Cormorant Garamond','Zen Old Mincho',Georgia,serif",
+          boxShadow:"0 4px 14px rgba(60,40,20,0.18)",
+          animation:"kidsPopIn 0.35s ease-out",
+        }}>
+          💬 {kidsHintBubble.msg}
+        </div>
+      )}
       {/* SVGデコレーション：内側細線＋飾り点線 */}
       {!flat && <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:0,overflow:"hidden",borderRadius:12}} viewBox="0 0 100 100" preserveAspectRatio="none">
         <rect x="4" y="4" width="92" height="92" fill="none" stroke="#c4a46a" strokeWidth="0.5" opacity="0.35" rx="1.5"/>
@@ -1406,6 +1507,69 @@ function GamePanel({ game, onUpdate, playerName, playerLang, gameIndex, onStartM
     (!gameStartedAt || m.ts >= gameStartedAt) &&
     m.gameId === game.id
   );
+
+  // ── リアクション機能 ─────────────────────────────────────────────
+  const myGameColor = game.players
+    ? (game.players.white === playerName ? "w" : game.players.black === playerName ? "b" : null)
+    : null;
+  const [reactionBar, setReactionBar]   = useState(false); // 相手手番後3秒表示
+  const [reactionAnim, setReactionAnim] = useState(null);  // 受信アニメーション {emoji,key}
+  const reactionBarTimerRef = useRef(null);
+  const prevHistLenRef = useRef((game.history || []).length);
+
+  // 相手が指したらリアクションバーを3秒表示
+  useEffect(() => {
+    const hist = game.history || [];
+    const len = hist.length;
+    if (len > prevHistLenRef.current && myGameColor && game.status === "playing") {
+      const lastColor = hist[len - 1]?.color;
+      if (lastColor && lastColor !== myGameColor) {
+        if (reactionBarTimerRef.current) clearTimeout(reactionBarTimerRef.current);
+        setReactionBar(true);
+        reactionBarTimerRef.current = setTimeout(() => setReactionBar(false), 3000);
+      }
+    }
+    prevHistLenRef.current = len;
+  }, [(game.history || []).length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // gameReactions/{gameId} を購読して受信アニメーション
+  useEffect(() => {
+    if (!game.id) return;
+    const r = ref(db, `gameReactions/${game.id}`);
+    const unsub = onValue(r, snap => {
+      const d = snap.val();
+      if (d && d.from && d.from !== playerName && d.emoji) {
+        setReactionAnim({ emoji: d.emoji, key: Date.now() });
+        setTimeout(() => setReactionAnim(null), 2000);
+      }
+    });
+    return () => unsub();
+  }, [game.id, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sendGameReaction = (emoji) => {
+    setReactionBar(false);
+    if (reactionBarTimerRef.current) clearTimeout(reactionBarTimerRef.current);
+    // Firebase に一時保存（相手がアニメーション表示）
+    const reactionData = { emoji, from: playerName, ts: Date.now() };
+    set(ref(db, `gameReactions/${game.id}`), reactionData).catch(() => {});
+    setTimeout(() => set(ref(db, `gameReactions/${game.id}`), null).catch(() => {}), 3000);
+    // チャットに記録
+    if (game.chatRoomId) {
+      const logMsg = {
+        text: playerLang === "en"
+          ? `${playerName} sent ${emoji}`
+          : `${playerName}が ${emoji} を送りました`,
+        sender: playerName,
+        ts: new Date().toISOString(),
+        isJP: playerLang !== "en",
+        reactionEmoji: emoji,
+        auto: true,
+        gameId: game.id,
+        gameType: "chess",
+      };
+      push(ref(db, `chat/${game.chatRoomId}`), logMsg).catch(() => {});
+    }
+  };
 
   // 対面モード：盤面エリアの実測サイズ（ResizeObserver で正確に計算）
   const [boardAreaNode, setBoardAreaNode] = useState(null);
@@ -2377,6 +2541,44 @@ function GamePanel({ game, onUpdate, playerName, playerLang, gameIndex, onStartM
         </div>
       )}
 
+      {/* ─── ゲームリアクション：受信フローティングアニメーション ─── */}
+      {reactionAnim && (
+        <div key={reactionAnim.key} style={{
+          position:"fixed", left:"50%", top:"40%", zIndex:9999,
+          fontSize:"clamp(40px,10vw,64px)", pointerEvents:"none",
+          animation:"reactionFloat 1.6s ease-out forwards",
+        }}>
+          {reactionAnim.emoji}
+        </div>
+      )}
+
+      {/* ─── ゲームリアクション：送信バー（相手手番後3秒） ─── */}
+      {reactionBar && myGameColor && (
+        <div style={{
+          position:"fixed", bottom:72, left:"50%", transform:"translateX(-50%)",
+          zIndex:3500, display:"flex", gap:6, padding:"8px 12px",
+          background:"rgba(42,26,8,0.88)", borderRadius:32,
+          boxShadow:"0 4px 16px rgba(0,0,0,0.40)",
+          animation:"reactionBarIn 0.25s ease-out",
+          backdropFilter:"blur(6px)",
+        }}>
+          {REACTIONS.map(r => (
+            <button key={r} onClick={() => sendGameReaction(r)} style={{
+              background:"none", border:"none", cursor:"pointer",
+              fontSize: r.length > 2 ? 13 : 26,
+              padding: r.length > 2 ? "4px 8px" : "2px 4px",
+              borderRadius:20, color: r.length > 2 ? "#ffe8a0" : "inherit",
+              fontFamily:"'Cormorant Garamond','Zen Old Mincho',Georgia,serif",
+              transition:"transform 0.12s",
+              lineHeight:1.2,
+            }}
+              onMouseEnter={e => e.currentTarget.style.transform="scale(1.35)"}
+              onMouseLeave={e => e.currentTarget.style.transform="scale(1)"}
+            >{r}</button>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 }
@@ -3114,6 +3316,60 @@ function ShogiPanel({ game, onUpdate, playerName, playerLang, gameIndex, members
   const capturedNamesRef = useRef({black:"",white:""});
   const prevStatusRef = useRef(game.status);
 
+  // ── リアクション機能（将棋） ──────────────────────────────────────
+  const myShogiColor = game.players
+    ? (game.players.black === playerName ? "b" : game.players.white === playerName ? "w" : null)
+    : null;
+  const [shogiReactionBar, setShogiReactionBar]   = useState(false);
+  const [shogiReactionAnim, setShogiReactionAnim] = useState(null);
+  const shogiReactionBarTimerRef = useRef(null);
+  const shogiPrevHistLenRef = useRef((game.history || []).length);
+
+  useEffect(() => {
+    const hist = game.history || [];
+    const len = hist.length;
+    if (len > shogiPrevHistLenRef.current && myShogiColor && game.status === "playing") {
+      const lastColor = hist[len - 1]?.color;
+      if (lastColor && lastColor !== myShogiColor) {
+        if (shogiReactionBarTimerRef.current) clearTimeout(shogiReactionBarTimerRef.current);
+        setShogiReactionBar(true);
+        shogiReactionBarTimerRef.current = setTimeout(() => setShogiReactionBar(false), 3000);
+      }
+    }
+    shogiPrevHistLenRef.current = len;
+  }, [(game.history || []).length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!game.id) return;
+    const r = ref(db, `gameReactions/${game.id}`);
+    const unsub = onValue(r, snap => {
+      const d = snap.val();
+      if (d && d.from && d.from !== playerName && d.emoji) {
+        setShogiReactionAnim({ emoji: d.emoji, key: Date.now() });
+        setTimeout(() => setShogiReactionAnim(null), 2000);
+      }
+    });
+    return () => unsub();
+  }, [game.id, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sendShogiReaction = (emoji) => {
+    setShogiReactionBar(false);
+    if (shogiReactionBarTimerRef.current) clearTimeout(shogiReactionBarTimerRef.current);
+    set(ref(db, `gameReactions/${game.id}`), { emoji, from: playerName, ts: Date.now() }).catch(() => {});
+    setTimeout(() => set(ref(db, `gameReactions/${game.id}`), null).catch(() => {}), 3000);
+    if (game.chatRoomId) {
+      const logMsg = {
+        text: playerLang === "en"
+          ? `${playerName} sent ${emoji}`
+          : `${playerName}が ${emoji} を送りました`,
+        sender: playerName, ts: new Date().toISOString(),
+        isJP: playerLang !== "en", reactionEmoji: emoji,
+        auto: true, gameId: game.id, gameType: "shogi",
+      };
+      push(ref(db, `chat/${game.chatRoomId}`), logMsg).catch(() => {});
+    }
+  };
+
   // ResizeObserver で対面モードの盤面サイズを計算（幅・高さ両方記録）
   const boardAreaRefCb = useCallback((node) => {
     if (!node) return;
@@ -3791,6 +4047,42 @@ function ShogiPanel({ game, onUpdate, playerName, playerLang, gameIndex, members
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── 将棋リアクション：受信フローティングアニメーション ─── */}
+      {shogiReactionAnim && (
+        <div key={shogiReactionAnim.key} style={{
+          position:"fixed", left:"50%", top:"40%", zIndex:9999,
+          fontSize:"clamp(40px,10vw,64px)", pointerEvents:"none",
+          animation:"reactionFloat 1.6s ease-out forwards",
+        }}>
+          {shogiReactionAnim.emoji}
+        </div>
+      )}
+
+      {/* ─── 将棋リアクション：送信バー ─── */}
+      {shogiReactionBar && myShogiColor && (
+        <div style={{
+          position:"fixed", bottom:72, left:"50%", transform:"translateX(-50%)",
+          zIndex:3500, display:"flex", gap:6, padding:"8px 12px",
+          background:"rgba(42,26,8,0.88)", borderRadius:32,
+          boxShadow:"0 4px 16px rgba(0,0,0,0.40)",
+          animation:"reactionBarIn 0.25s ease-out",
+          backdropFilter:"blur(6px)",
+        }}>
+          {REACTIONS.map(r => (
+            <button key={r} onClick={() => sendShogiReaction(r)} style={{
+              background:"none", border:"none", cursor:"pointer",
+              fontSize: r.length > 2 ? 13 : 26,
+              padding: r.length > 2 ? "4px 8px" : "2px 4px",
+              borderRadius:20, color: r.length > 2 ? "#ffe8a0" : "inherit",
+              fontFamily:serif, transition:"transform 0.12s", lineHeight:1.2,
+            }}
+              onMouseEnter={e => e.currentTarget.style.transform="scale(1.35)"}
+              onMouseLeave={e => e.currentTarget.style.transform="scale(1)"}
+            >{r}</button>
+          ))}
         </div>
       )}
     </div>
@@ -7120,6 +7412,7 @@ export default function App() {
   const [showChat, setShowChat] = useState(false);
   const [chatRooms, setChatRooms] = useState([]);
   const [activeRoomId, setActiveRoomId] = useState(null);
+  const [chatReactionPicker, setChatReactionPicker] = useState(null); // {msgId, roomId}
   // プレイヤーが切り替わったらアクティブルームをリセット（他ユーザーのチャットが残らないように）
   useEffect(() => { setActiveRoomId(null); }, [playerName]);
   const [roomMessages, setRoomMessages] = useState({});
@@ -8719,17 +9012,59 @@ export default function App() {
                             )}
                           </div>
                           <div style={{maxWidth:"78%", position:"relative"}}>
-                            <div style={{background: isMe ? "linear-gradient(135deg,#D4A888,#b88a6a)" : "#fffdf8", color: isMe ? "#3a2e22" : "#3a2e22", borderRadius: isMe ? "16px 4px 16px 16px" : "4px 16px 16px 16px", padding:"10px 14px", boxShadow:"0 1px 4px rgba(60,40,20,0.10)", border: isMe ? "none" : "1px solid #e0d4c0"}}>
-                              {m.text && <div style={{fontSize:"clamp(18px,4vw,21px)", lineHeight:1.6}}>{m.text}</div>}
-                              {m.translation && (
-                                <div style={{fontSize:"clamp(18px,4vw,21px)", marginTop:4, lineHeight:1.5, color: isMe ? "rgba(245,234,216,0.75)" : "#7a6040", borderTop: isMe ? "1px solid rgba(245,234,216,0.2)" : "1px solid #e0d4c0", paddingTop:4}}>
-                                  {m.isJP ? "🇺🇸" : "🇯🇵"} {m.translation}
+                            {/* 吹き出し本体（長押し/右クリックでリアクションピッカー） */}
+                            {(() => {
+                              const longPressTimer = { current: null };
+                              const startLP = () => { longPressTimer.current = setTimeout(() => setChatReactionPicker({msgId: m.id, roomId: activeRoomId}), 500); };
+                              const cancelLP = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } };
+                              return (
+                                <div
+                                  onTouchStart={startLP} onTouchEnd={cancelLP} onTouchMove={cancelLP}
+                                  onContextMenu={e => { e.preventDefault(); setChatReactionPicker({msgId: m.id, roomId: activeRoomId}); }}
+                                  style={{background: m.reactionEmoji ? "transparent" : (isMe ? "linear-gradient(135deg,#D4A888,#b88a6a)" : "#fffdf8"), color:"#3a2e22", borderRadius: isMe ? "16px 4px 16px 16px" : "4px 16px 16px 16px", padding: m.reactionEmoji ? "2px 4px" : "10px 14px", boxShadow: m.reactionEmoji ? "none" : "0 1px 4px rgba(60,40,20,0.10)", border: (isMe || m.reactionEmoji) ? "none" : "1px solid #e0d4c0", cursor:"default", userSelect:"none"}}
+                                >
+                                  {m.reactionEmoji
+                                    ? <span style={{fontSize:"clamp(15px,3.5vw,18px)", color:"#8a6848", fontFamily:"'Cormorant Garamond','Zen Old Mincho',Georgia,serif", fontStyle:"italic"}}>{m.text}</span>
+                                    : <>
+                                        {m.text && <div style={{fontSize:"clamp(18px,4vw,21px)", lineHeight:1.6}}>{m.text}</div>}
+                                        {m.translation && (
+                                          <div style={{fontSize:"clamp(18px,4vw,21px)", marginTop:4, lineHeight:1.5, color: isMe ? "rgba(245,234,216,0.75)" : "#7a6040", borderTop: isMe ? "1px solid rgba(245,234,216,0.2)" : "1px solid #e0d4c0", paddingTop:4}}>
+                                            {m.isJP ? "🇺🇸" : "🇯🇵"} {m.translation}
+                                          </div>
+                                        )}
+                                      </>
+                                  }
                                 </div>
-                              )}
-                            </div>
-                            {isMe && (
+                              );
+                            })()}
+                            {isMe && !m.reactionEmoji && (
                               <button onClick={() => { remove(ref(db, `chat/${activeRoomId}/${m.id}`)); }} style={{position:"absolute", top:-6, right:-6, background:"#8a3322", border:"none", borderRadius:"50%", color:"#ffe8e0", width:20, height:20, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center"}}>✕</button>
                             )}
+                            {/* リアクション集計バッジ */}
+                            {m.reactions && Object.keys(m.reactions).length > 0 && (() => {
+                              const grouped = Object.values(m.reactions).reduce((acc, emoji) => {
+                                acc[emoji] = (acc[emoji] || 0) + 1; return acc;
+                              }, {});
+                              const myReaction = m.reactions?.[playerName];
+                              return (
+                                <div style={{display:"flex", flexWrap:"wrap", gap:4, marginTop:4, justifyContent: isMe ? "flex-end" : "flex-start"}}>
+                                  {Object.entries(grouped).map(([emoji, count]) => (
+                                    <button key={emoji} onClick={() => {
+                                      if (myReaction === emoji) remove(ref(db, `chat/${activeRoomId}/${m.id}/reactions/${playerName}`)).catch(() => {});
+                                      else set(ref(db, `chat/${activeRoomId}/${m.id}/reactions/${playerName}`), emoji).catch(() => {});
+                                    }} style={{
+                                      background: myReaction === emoji ? "rgba(212,168,136,0.35)" : "rgba(255,253,248,0.9)",
+                                      border: myReaction === emoji ? "1.5px solid #D4A888" : "1px solid #e0d4c0",
+                                      borderRadius:12, padding:"2px 7px", cursor:"pointer", fontSize:15,
+                                      display:"flex", alignItems:"center", gap:3,
+                                      animation:"chatReactionPop 0.25s ease-out",
+                                    }}>
+                                      {emoji} {count > 1 && <span style={{fontSize:13, color:"#7a5838", fontWeight:600}}>{count}</span>}
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       );
@@ -8748,6 +9083,52 @@ export default function App() {
                   {t("ルームを選んでください","Select a room","ルームをえらんでね","Select a room")}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* チャットリアクションピッカー */}
+      {chatReactionPicker && (
+        <div onClick={() => setChatReactionPicker(null)} style={{position:"fixed", inset:0, zIndex:9100}}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position:"fixed", left:"50%", top:"50%", transform:"translate(-50%,-50%)",
+            background:"linear-gradient(135deg,#2a1e14,#1a120c)",
+            border:"1.5px solid #6a4a3a", borderRadius:20, padding:"14px 16px",
+            boxShadow:"0 8px 32px rgba(0,0,0,0.50)", zIndex:9101,
+            display:"flex", flexDirection:"column", alignItems:"center", gap:10,
+          }}>
+            <div style={{color:"#c0a888", fontSize:15, fontFamily:"'Cormorant Garamond','Zen Old Mincho',Georgia,serif", letterSpacing:"0.06em"}}>
+              {playerLang === "en" ? "React" : "リアクション"}
+            </div>
+            <div style={{display:"flex", flexWrap:"wrap", gap:8, justifyContent:"center", maxWidth:260}}>
+              {REACTIONS.map(r => {
+                const isTextReaction = r.length > 2;
+                return (
+                  <button key={r} onClick={() => {
+                    const existing = (roomMessages[chatReactionPicker.roomId] || []).find(m => m.id === chatReactionPicker.msgId);
+                    if (existing?.reactions?.[playerName] === r) {
+                      remove(ref(db, `chat/${chatReactionPicker.roomId}/${chatReactionPicker.msgId}/reactions/${playerName}`)).catch(() => {});
+                    } else {
+                      set(ref(db, `chat/${chatReactionPicker.roomId}/${chatReactionPicker.msgId}/reactions/${playerName}`), r).catch(() => {});
+                    }
+                    setChatReactionPicker(null);
+                  }} style={{
+                    background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.12)",
+                    borderRadius:isTextReaction ? 10 : "50%",
+                    width: isTextReaction ? "auto" : 44, height: isTextReaction ? "auto" : 44,
+                    padding: isTextReaction ? "6px 10px" : 0,
+                    cursor:"pointer", fontSize: isTextReaction ? 13 : 24,
+                    color: isTextReaction ? "#ffe8a0" : "inherit",
+                    fontFamily:"'Cormorant Garamond','Zen Old Mincho',Georgia,serif",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    transition:"transform 0.12s, background 0.12s",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.transform="scale(1.25)"; e.currentTarget.style.background="rgba(255,255,255,0.18)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform="scale(1)"; e.currentTarget.style.background="rgba(255,255,255,0.08)"; }}
+                  >{r}</button>
+                );
+              })}
             </div>
           </div>
         </div>

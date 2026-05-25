@@ -3,6 +3,29 @@
   100% { opacity: 1; transform: scale(1)    translateY(0);    }
 }
 
+@keyframes kidsPopIn {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.75) translateY(-6px); }
+  60%  { opacity: 1; transform: translateX(-50%) scale(1.05) translateY(2px); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1)    translateY(0);   }
+}
+
+@keyframes reactionFloat {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1.0); }
+  70%  { opacity: 1; transform: translateX(-50%) translateY(-90px) scale(1.4); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-130px) scale(0.8); }
+}
+
+@keyframes reactionBarIn {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes chatReactionPop {
+  0%   { opacity: 0; transform: scale(0.5); }
+  70%  { transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;
