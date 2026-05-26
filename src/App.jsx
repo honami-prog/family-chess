@@ -6357,7 +6357,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setDropSel(null); setSel(null); setLegal([]);
     setShogiMoveHistory([]);
     setPracticeGameHistory([]);
-    setShogiTurn(puzzle.turn);
+    setShogiTurn(puzzle.turn ?? 'b');
     setLastMoveSh(null);
     setTacticsResultS(null);
     setTacticsHintUsedS(false);
@@ -6395,11 +6395,17 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setTacticsErrorS(null);
     setTacticsPuzzlesS([]);
     setTacticsIdxS(0);
-    fetch('/puzzles/shogi.json')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(data => {
-        const list = tacticsDiffS ? data.filter(p => p.difficulty === tacticsDiffS) : data;
-        if (list.length === 0) throw new Error(playerLang === 'en' ? 'No puzzles found for this difficulty.' : 'この難度の問題が見つかりません。');
+    const _shogiFiles = tacticsDiffS === 'Easy' ? ['/puzzles/shogi/easy.json']
+      : tacticsDiffS === 'Normal' ? ['/puzzles/shogi/normal.json']
+      : tacticsDiffS === 'Hard' ? ['/puzzles/shogi/hard.json']
+      : ['/puzzles/shogi/easy.json','/puzzles/shogi/normal.json','/puzzles/shogi/hard.json'];
+    Promise.all(_shogiFiles.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })))
+      .then(arrays => {
+        const data = arrays.flat();
+        if (data.length === 0) throw new Error(playerLang === 'en' ? 'No puzzles found for this difficulty.' : 'この難度の問題が見つかりません。');
+        // Shuffle puzzles for random order
+        const list = [...data];
+        for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
         setTacticsPuzzlesS(list);
         // Restore saved puzzle index if coming back from a session
         const restoreIdx = shogiRestoreIdxRef.current;
@@ -6795,10 +6801,8 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <span style={{fontFamily:serif,fontSize:14,color:"#c04040",alignSelf:"center"}}>{tacticsErrorS}</span>
         <button onClick={()=>{
           setTacticsErrorS(null); setTacticsLoadingS(true);
-          fetch('/puzzles/shogi.json').then(r=>r.json()).then(data=>{
-            const list=tacticsDiffS?data.filter(p=>p.difficulty===tacticsDiffS):data;
-            setTacticsPuzzlesS(list); setTacticsIdxS(0); setTacticsLoadingS(false);
-          }).catch(e=>{setTacticsLoadingS(false);setTacticsErrorS(e.message);});
+          const _rf1=tacticsDiffS==='Easy'?['/puzzles/shogi/easy.json']:tacticsDiffS==='Normal'?['/puzzles/shogi/normal.json']:tacticsDiffS==='Hard'?['/puzzles/shogi/hard.json']:['/puzzles/shogi/easy.json','/puzzles/shogi/normal.json','/puzzles/shogi/hard.json'];
+          Promise.all(_rf1.map(f=>fetch(f).then(r=>r.json()))).then(arrays=>{const list=[...arrays.flat()];for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]];}setTacticsPuzzlesS(list);setTacticsIdxS(0);setTacticsLoadingS(false);}).catch(e=>{setTacticsLoadingS(false);setTacticsErrorS(e.message);});
         }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>{playerLang==="en"?"Retry":"再試行"}</button>
       </>) : tacticsLoadingS ? (<>
         <span style={{fontFamily:serif,fontSize:15,color:"#7a5838",alignSelf:"center"}}>{playerLang==="en"?"Loading…":"読み込み中…"}</span>
@@ -6881,10 +6885,8 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <span style={{color:"#f08080",fontFamily:serif,fontSize:13,alignSelf:"center"}}>{tacticsErrorS}</span>
                 <button onClick={()=>{
                   setTacticsErrorS(null); setTacticsLoadingS(true);
-                  fetch('/puzzles/shogi.json').then(r=>r.json()).then(data=>{
-                    const list=tacticsDiffS?data.filter(p=>p.difficulty===tacticsDiffS):data;
-                    setTacticsPuzzlesS(list); setTacticsIdxS(0); setTacticsLoadingS(false);
-                  }).catch(e=>{setTacticsLoadingS(false);setTacticsErrorS(e.message);});
+                  const _rf2=tacticsDiffS==='Easy'?['/puzzles/shogi/easy.json']:tacticsDiffS==='Normal'?['/puzzles/shogi/normal.json']:tacticsDiffS==='Hard'?['/puzzles/shogi/hard.json']:['/puzzles/shogi/easy.json','/puzzles/shogi/normal.json','/puzzles/shogi/hard.json'];
+                  Promise.all(_rf2.map(f=>fetch(f).then(r=>r.json()))).then(arrays=>{const list=[...arrays.flat()];for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]];}setTacticsPuzzlesS(list);setTacticsIdxS(0);setTacticsLoadingS(false);}).catch(e=>{setTacticsLoadingS(false);setTacticsErrorS(e.message);});
                 }} style={fsBtn}>{playerLang==="en"?"Retry":"再試行"}</button>
               </>) : tacticsLoadingS ? (
                 <span style={{color:"rgba(255,255,255,0.7)",fontFamily:serif,fontSize:14,alignSelf:"center"}}>{playerLang==="en"?"Loading…":"読み込み中…"}</span>
