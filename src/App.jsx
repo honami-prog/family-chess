@@ -7923,45 +7923,39 @@ export default function App() {
     const unsub = onValue(membersRef, (snap) => {
       const data = snap.val();
 
-      // Firebase snap.val() の形式を配列に変換する共通処理
-      // 旧形式: 配列 (Firebase が数値キーで返す)
-      // 新形式: 名前キーオブジェクト {Thomas:{lang,kids,avatarUrl}, ...}
-      let membersArr = null;
-      if (data && Array.isArray(data) && data.length > 0) {
-        // 旧形式（数値キー配列）→ そのまま使い、名前キー形式に移行保存
-        membersArr = data.filter(Boolean);
-      } else if (data && typeof data === "object" && !Array.isArray(data)) {
-        // 新形式（名前キーオブジェクト）→ 配列に変換
-        membersArr = Object.entries(data).map(([name, v]) => ({
+      // ── Firebase からメンバーを読み込む（読み取り専用・自動書き込み禁止）──
+      // メンバーデータの正はFirebaseのみ。
+      // アプリ側からの自動初期化・上書きは一切行わない。
+      // メンバーの追加・編集・削除はユーザーが設定画面で明示的に操作した
+      // 場合のみ saveMembers() を通じて書き込む。
+
+      if (!data) {
+        // Firebase に members ノードが存在しない場合は何もしない。
+        // （DEFAULT_MEMBERS の useState 初期値がそのまま表示される）
+        return;
+      }
+
+      // 名前キーオブジェクト形式 {Thomas:{lang,kids,avatarUrl}, ...} → 配列に変換
+      if (typeof data === "object" && !Array.isArray(data)) {
+        const membersArr = Object.entries(data).map(([name, v]) => ({
           name,
           lang:      v?.lang      ?? "ja",
           kids:      v?.kids      ?? false,
           avatarUrl: v?.avatarUrl ?? undefined,
         }));
-      }
-
-      if (membersArr && membersArr.length > 0) {
-        // マイグレーション: 「帆南美」アカウントを「Honami」に統合
-        const hasHonami   = membersArr.some(m => m.name === "Honami");
-        const hasJapanese = membersArr.some(m => m.name === "帆南美");
-        if (hasJapanese) {
-          const merged = hasHonami
-            ? membersArr.filter(m => m.name !== "帆南美")
-            : membersArr.map(m => m.name === "帆南美" ? { ...m, name: "Honami" } : m);
-          set(membersRef, membersToFirebaseObj(merged));
-          setMembers(merged);
-        } else {
-          // 旧形式だった場合は名前キー形式に移行保存
-          if (Array.isArray(data)) {
-            set(membersRef, membersToFirebaseObj(membersArr));
-          }
+        if (membersArr.length > 0) {
           setMembers(membersArr);
         }
-      } else {
-        const saved = localStorage.getItem("chess_members");
-        const initial = saved ? JSON.parse(saved) : DEFAULT_MEMBERS;
-        set(membersRef, membersToFirebaseObj(initial));
-        setMembers(initial);
+        return;
+      }
+
+      // 旧形式（数値キー配列）が万一来た場合も読み取り専用で反映
+      // Firebase への書き戻しは行わない
+      if (Array.isArray(data) && data.length > 0) {
+        const membersArr = data.filter(Boolean);
+        if (membersArr.length > 0) {
+          setMembers(membersArr);
+        }
       }
     });
     return () => unsub();
