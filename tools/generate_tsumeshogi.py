@@ -8,9 +8,10 @@ Cell: {"t":"G","c":"b","p":false}
 Solution: [{"drop":"G","to":[r,c]} OR {"from":[r,c],"to":[r,c],"promote":bool}]
 """
 
-import shogi, json, random, os, sys
+import shogi, json, random, os, sys, time
 
 random.seed(42)
+_DEADLINE = None  # per-call deadline for timed solves
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,11 @@ def board_to_sfen(b9,hb,hw,turn='b'):
 
 # ── Solver ────────────────────────────────────────────────────────────────────
 
+class _Timeout(Exception): pass
+
 def find_mate(b,hm):
+    global _DEADLINE
+    if _DEADLINE and time.time()>_DEADLINE: raise _Timeout()
     if b.turn!=shogi.BLACK: return None
     for move in b.legal_moves:
         b.push(move)
@@ -70,12 +75,16 @@ def find_mate(b,hm):
         if ok and bw: return [move.usi(),bw]+bc
     return None
 
-def solve(ab,hb,hw,hm):
+def solve(ab,hb,hw,hm,limit=None):
+    global _DEADLINE
     sfen=board_to_sfen(ab,hb,hw)
     try: b=shogi.Board(sfen)
     except: return None
     if b.turn!=shogi.BLACK or b.is_check(): return None
-    return find_mate(b,hm)
+    _DEADLINE = (time.time()+limit) if limit else None
+    try: return find_mate(b,hm)
+    except _Timeout: return None
+    finally: _DEADLINE=None
 
 # ── Entry builder ─────────────────────────────────────────────────────────────
 
@@ -305,17 +314,19 @@ def gen_5te(p3,target=120):
     res=[];seen=set()
     BKR,BKC=8,4
 
+    TLIMIT=0.5  # per-call time limit in seconds
+
     def add5(board,hb,hw=None):
         if len(res)>=target: return
         if hw is None: hw={}
         sfen=board_to_sfen(board,hb,hw)
         if sfen in seen: return
         seen.add(sfen)
-        sol=solve(board,hb,hw,5)
+        sol=solve(board,hb,hw,5,limit=TLIMIT)
         if sol and len(sol)==5: res.append((copy_board(board),dict(hb),dict(hw),sol,5))
 
-    # 1-step backward from 3-te (main source)
-    print("[5-te] Backward extension from 3-te...",flush=True)
+    # 1-step backward from 3-te (with per-call timeout)
+    print("[5-te] Backward extension from 3-te (0.5s/call)...",flush=True)
     for (b3,hb,hw,_,_) in p3:
         if len(res)>=target: break
         wkr=wkc=None
