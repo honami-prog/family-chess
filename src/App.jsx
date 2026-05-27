@@ -6,6 +6,8 @@ import AnalysisView from "./AnalysisView.jsx";
 import AnalysisList from "./AnalysisList.jsx";
 import AutoAnalyzer from "./AutoAnalyzer.jsx";
 import { CHESS_OPENINGS, SHOGI_OPENINGS, CHESS_TACTICS, SHOGI_TACTICS, uciMovesToChessHistory, usiMovesToShogiHistory } from "./openingsData.js";
+import { CHESS_STRATEGY, CHESS_STRATEGY_FEATURED } from "./data/strategy/chess-strategy.js";
+import { SHOGI_STRATEGY, SHOGI_STRATEGY_FEATURED } from "./data/strategy/shogi-strategy.js";
 import { ChessEngine, boardToFen, uciToCoords, CHESS_AI_LEVELS } from "./chessEngine.js";
 // 将棋駒画像（Vite でバンドルに含める）
 import _sImg_ou     from "./assets/shogi/ou.png";
@@ -4636,6 +4638,144 @@ function FormationModal({ modal, setModal, playerLang, getShogiImg: gsi }) {
   );
 }
 
+// ── Strategy helpers (module-level, shared by StrategyModal) ─────────
+function _stratFenToBoard(fen) {
+  const [placement] = fen.split(' ');
+  const bd = Array(8).fill(null).map(()=>Array(8).fill(null));
+  let row=0, col=0;
+  for (const ch of placement) {
+    if (ch==='/') { row++; col=0; }
+    else if (/\d/.test(ch)) { col+=parseInt(ch); }
+    else { bd[row][col]={type:ch.toUpperCase(),color:ch===ch.toUpperCase()?'w':'b'}; col++; }
+  }
+  return bd;
+}
+function _stratApplyMove(bd, uci) {
+  const fc=uci.charCodeAt(0)-97, fr=8-parseInt(uci[1]);
+  const tc=uci.charCodeAt(2)-97, tr=8-parseInt(uci[3]);
+  const promo=uci[4];
+  const nb=bd.map(r=>[...r]);
+  const piece=nb[fr][fc]; if(!piece) return nb;
+  if(piece.type==='P'&&fc!==tc&&!nb[tr][tc]) nb[fr][tc]=null; // en passant
+  if(piece.type==='K'&&Math.abs(tc-fc)===2) {
+    if(tc===6){nb[tr][5]=nb[tr][7];nb[tr][7]=null;} else {nb[tr][3]=nb[tr][0];nb[tr][0]=null;}
+  }
+  nb[tr][tc]=promo?{type:promo.toUpperCase(),color:piece.color}:piece;
+  nb[fr][fc]=null;
+  return nb;
+}
+
+// ── StrategyModal ─────────────────────────────────────────────────────
+function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
+  const [step, setStep] = useState(0);
+
+  // Pre-compute all board states
+  const boards = useMemo(() => {
+    if (!theme?.fen) return [];
+    const states = [];
+    let bd = _stratFenToBoard(theme.fen);
+    states.push(bd);
+    for (const uci of (theme.moves||[])) {
+      bd = _stratApplyMove(bd, uci);
+      states.push(bd);
+    }
+    return states;
+  }, [theme]);
+
+  // Reset step when theme changes
+  useEffect(() => { setStep(0); }, [theme?.id]);
+
+  if (!theme) return null;
+  const board = boards[step];
+  const lastMoveUci = step>0 ? theme.moves[step-1] : null;
+  const lastFrom = lastMoveUci ? [8-parseInt(lastMoveUci[1]), lastMoveUci.charCodeAt(0)-97] : null;
+  const lastTo   = lastMoveUci ? [8-parseInt(lastMoveUci[3]), lastMoveUci.charCodeAt(2)-97] : null;
+  const comments = playerLang==="en" ? theme.moveComments.en : theme.moveComments.ja;
+  const comment = comments[step] || "";
+  const points = playerLang==="en" ? theme.pointsEn : theme.pointsJa;
+  const maxStep = (theme.moves||[]).length;
+  const lvlColor = {beginner:"#4a9",intermediate:"#c90",advanced:"#d44"}[theme.level]||"#888";
+  const lvlLabel = ({beginner:{ja:"初級",en:"Beginner"},intermediate:{ja:"中級",en:"Intermediate"},advanced:{ja:"上級",en:"Advanced"}}[theme.level]||{})[playerLang==="en"?"en":"ja"]||theme.level;
+  const catLabel = playerLang==="en" ? theme.categoryEn : theme.category;
+  const navBtn = {background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:6,color:"#7a5838",padding:"4px 10px",cursor:"pointer",fontSize:15,fontFamily:serif};
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9900,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"10px 0",fontFamily:serif}}
+      onClick={onClose}>
+      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:16,padding:"20px 20px 16px",maxWidth:400,width:"94vw",boxSizing:"border-box",margin:"auto"}}
+        onClick={e=>e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:18,color:"#3a2e22",marginBottom:4}}>
+              {playerLang==="en"?theme.nameEn:theme.nameJa}
+            </div>
+            <span style={{background:lvlColor,color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:600,marginRight:6}}>{lvlLabel}</span>
+            <span style={{background:"rgba(100,80,40,0.1)",color:"#7a5838",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:500}}>{catLabel}</span>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#7a5838",lineHeight:1,paddingLeft:8}}>✕</button>
+        </div>
+
+        {/* Description */}
+        <div style={{fontSize:14,color:"#5a3c18",lineHeight:1.75,marginBottom:14,whiteSpace:"pre-line"}}>
+          {playerLang==="en"?theme.descriptionEn:theme.descriptionJa}
+        </div>
+
+        {/* Board (only for chess with FEN) */}
+        {board && (
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:12}}>
+            <div style={{border:"2px solid #8b6040",borderRadius:3,overflow:"hidden",display:"inline-block"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(8,38px)",gridTemplateRows:"repeat(8,38px)"}}>
+                {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
+                  const isLight=(r+c)%2===0;
+                  const piece=board[r]?.[c];
+                  const isHlFrom=lastFrom&&lastFrom[0]===r&&lastFrom[1]===c;
+                  const isHlTo=lastTo&&lastTo[0]===r&&lastTo[1]===c;
+                  const bg=(isHlFrom||isHlTo)?(isLight?"#f6f669":"#baca2b"):(isLight?"#f0d9b5":"#b58863");
+                  return (
+                    <div key={`${r}-${c}`} style={{width:38,height:38,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      {piece&&<img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>}
+                    </div>
+                  );
+                }))}
+              </div>
+            </div>
+            <div style={{marginTop:6,fontSize:13,color:"#6a4820",textAlign:"center",minHeight:18,padding:"0 4px"}}>{comment}</div>
+            <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center"}}>
+              <button onClick={()=>setStep(0)} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀◀</button>
+              <button onClick={()=>setStep(s=>Math.max(0,s-1))} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀</button>
+              <span style={{fontSize:13,color:"#7a5838",minWidth:44,textAlign:"center"}}>{step} / {maxStep}</span>
+              <button onClick={()=>setStep(s=>Math.min(maxStep,s+1))} disabled={step>=maxStep} style={{...navBtn,opacity:step>=maxStep?0.35:1}}>▶</button>
+              <button onClick={()=>setStep(maxStep)} disabled={step>=maxStep} style={{...navBtn,opacity:step>=maxStep?0.35:1}}>▶▶</button>
+            </div>
+          </div>
+        )}
+
+        {/* Key Points */}
+        <div style={{background:"rgba(100,80,40,0.07)",borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+          <div style={{fontWeight:700,fontSize:13,color:"#7a5838",marginBottom:6,letterSpacing:0.5}}>
+            {playerLang==="en"?"Key Points":"ポイント"}
+          </div>
+          {points.map((pt,i)=>(
+            <div key={i} style={{fontSize:13,color:"#5a3c18",marginBottom:i<points.length-1?4:0,lineHeight:1.55}}>{pt}</div>
+          ))}
+        </div>
+
+        {/* Practice button */}
+        {onPractice && (
+          <button onClick={()=>onPractice(theme)} style={{display:"block",width:"100%",background:"#c8a86a",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:serif,marginBottom:8}}>
+            {playerLang==="en"?"Practice this theme →":"このテーマで練習する →"}
+          </button>
+        )}
+        <button onClick={onClose} style={{display:"block",width:"100%",background:"transparent",border:"1px solid #c8b090",borderRadius:10,padding:"8px 0",fontSize:14,color:"#9a8878",cursor:"pointer",fontFamily:serif}}>
+          {playerLang==="en"?"Close":"閉じる"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="", onAnalyze, startInFullScreen=false, onSwitchToGame, onFsConsumed, onOpenOpening, onOpenTactic}) {
   const boardKey = `chessPracticeBoard_${playerName}`;
   const capKey = `chessPracticeCapPieces_${playerName}`;
@@ -4655,6 +4795,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [showAllFormations, setShowAllFormations] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [pieceGuideOpen, setPieceGuideOpen] = useState(false);
+  // Strategy modal
+  const [strategyOpen, setStrategyOpen] = useState(null); // null | strategy theme object
+  const [strategyShowAll, setStrategyShowAll] = useState(false);
   const [practiceRules, setPracticeRules] = useState({castling:true, enPassant:true, promotion:true});
   // Tactics mode
   const [tacticsMode, setTacticsMode] = useState(false);
@@ -6015,6 +6158,28 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 </div>
               </div>
             )}
+            {/* Strategy section (chess) */}
+            <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box",marginTop:4}}>
+              <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>
+                {playerLang==="en"?"Strategy":"ストラテジー"}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {(strategyShowAll ? CHESS_STRATEGY : CHESS_STRATEGY.filter(s=>CHESS_STRATEGY_FEATURED.includes(s.id))).map(s=>(
+                  <button key={s.id} onClick={()=>setStrategyOpen(s)}
+                    style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#eddcb8"}
+                    onMouseLeave={e=>e.currentTarget.style.background="#fdf6e8"}>
+                    {playerLang==="en"?s.nameEn:s.nameJa}
+                  </button>
+                ))}
+                {!strategyShowAll && CHESS_STRATEGY.length > CHESS_STRATEGY_FEATURED.length && (
+                  <button onClick={()=>setStrategyShowAll(true)}
+                    style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                    {playerLang==="en"?"More ▸":"もっと見る ▸"}
+                  </button>
+                )}
+              </div>
+            </div>
             <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 14px",boxSizing:"border-box",marginTop:4}}>
               <div onClick={()=>setDiffOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
                 <div style={{fontWeight:600,fontSize:16,color:"#3a2e22"}}>{playerLang==="en"?"Differences from Shogi":"将棋との違い"}</div>
@@ -6031,6 +6196,18 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           {chessVictoryModalEl}
           {tacticsResultModalEl}
           {tacticsDiffSelectModal}
+          {strategyOpen && (
+            <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
+              onPractice={(theme)=>{
+                setStrategyOpen(null);
+                const tTheme=theme.tacticTheme;
+                const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
+                const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
+                if(onOpenTactic) onOpenTactic(matchingTactic||fallback,"chess");
+                else setTacticsDiffSelect(true);
+              }}
+            />
+          )}
         </>
       );
     }
@@ -6068,6 +6245,18 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         {chessVictoryModalEl}
         {tacticsResultModalEl}
         {tacticsDiffSelectModal}
+        {strategyOpen && (
+          <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
+            onPractice={(theme)=>{
+              setStrategyOpen(null);
+              const tTheme=theme.tacticTheme;
+              const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
+              const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
+              if(onOpenTactic) onOpenTactic(matchingTactic||fallback,"chess");
+              else setTacticsDiffSelect(true);
+            }}
+          />
+        )}
       </>
     );
   }
@@ -6127,6 +6316,24 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             </div>
           </div>
         )}
+        {/* Strategy section (chess mobile) */}
+        <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box"}}>
+          <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>{playerLang==="en"?"Strategy":"ストラテジー"}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {(strategyShowAll ? CHESS_STRATEGY : CHESS_STRATEGY.filter(s=>CHESS_STRATEGY_FEATURED.includes(s.id))).map(s=>(
+              <button key={s.id} onClick={()=>setStrategyOpen(s)}
+                style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?s.nameEn:s.nameJa}
+              </button>
+            ))}
+            {!strategyShowAll && CHESS_STRATEGY.length > CHESS_STRATEGY_FEATURED.length && (
+              <button onClick={()=>setStrategyShowAll(true)}
+                style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?"More ▸":"もっと見る ▸"}
+              </button>
+            )}
+          </div>
+        </div>
         {chessFormationsEl}
         <FormationModal modal={formationModal} setModal={setFormationModal} playerLang={playerLang} getShogiImg={null}/>
       </div>
@@ -6134,6 +6341,26 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       {chessVictoryModalEl}
       {tacticsResultModalEl}
       {tacticsDiffSelectModal}
+      {strategyOpen && (
+        <StrategyModal
+          theme={strategyOpen}
+          playerLang={playerLang}
+          serif={serif}
+          onClose={()=>setStrategyOpen(null)}
+          onPractice={(theme)=>{
+            setStrategyOpen(null);
+            // Map tacticTheme to tactics start
+            if (onOpenTactic) {
+              const tTheme = theme.tacticTheme;
+              const matchingTactic = tTheme ? CHESS_TACTICS.find(tt=>tt.id===tTheme) : null;
+              const fallback = CHESS_TACTICS.find(tt=>!tt.direct) || CHESS_TACTICS[0];
+              onOpenTactic(matchingTactic||fallback, "chess");
+            } else {
+              setTacticsDiffSelect(true);
+            }
+          }}
+        />
+      )}
     </>
   );
 }
@@ -6222,6 +6449,9 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [diffOpen, setDiffOpen] = useState(false);
   const [forbidOpen, setForbidOpen] = useState(false);
   const [shogiGuideOpen, setShogiGuideOpen] = useState(false);
+  // Strategy modal
+  const [strategyOpenS, setStrategyOpenS] = useState(null);
+  const [strategyShowAllS, setStrategyShowAllS] = useState(false);
   const serif = "'Cormorant Garamond','Zen Old Mincho',Georgia,serif";
   const [fullScreen, setFullScreen] = useState(startInFullScreen||false);
   useEffect(()=>{ if(startInFullScreen && onFsConsumed) onFsConsumed(); },[]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -7255,6 +7485,28 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 </div>
               </div>
             )}
+            {/* Strategy section (shogi desktop) */}
+            <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box",marginTop:4}}>
+              <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>
+                {playerLang==="en"?"Strategy":"ストラテジー"}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {(strategyShowAllS ? SHOGI_STRATEGY : SHOGI_STRATEGY.filter(s=>SHOGI_STRATEGY_FEATURED.includes(s.id))).map(s=>(
+                  <button key={s.id} onClick={()=>setStrategyOpenS(s)}
+                    style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#eddcb8"}
+                    onMouseLeave={e=>e.currentTarget.style.background="#fdf6e8"}>
+                    {playerLang==="en"?s.nameEn:s.nameJa}
+                  </button>
+                ))}
+                {!strategyShowAllS && SHOGI_STRATEGY.length > SHOGI_STRATEGY_FEATURED.length && (
+                  <button onClick={()=>setStrategyShowAllS(true)}
+                    style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                    {playerLang==="en"?"More ▸":"もっと見る ▸"}
+                  </button>
+                )}
+              </div>
+            </div>
             <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 14px",boxSizing:"border-box",marginTop:4}}>
               <div onClick={()=>setDiffOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
                 <div style={{fontWeight:600,fontSize:16,color:"#3a2e22"}}>{playerLang==="en"?"Differences from Chess":"チェスとの違い"}</div>
@@ -7283,6 +7535,11 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           {shogiVictoryModalEl}
           {tacticsResultModalElS}
           {tacticsDiffSelectModalS}
+          {strategyOpenS && (
+            <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
+              onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+            />
+          )}
         </>
       );
     }
@@ -7319,6 +7576,11 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         {shogiVictoryModalEl}
         {tacticsResultModalElS}
         {tacticsDiffSelectModalS}
+        {strategyOpenS && (
+          <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
+            onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+          />
+        )}
       </>
     );
   }
@@ -7379,6 +7641,24 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         )}
         {shogiFormationsEl}
         <FormationModal modal={formationModal} setModal={setFormationModal} playerLang={playerLang} getShogiImg={getShogiImg}/>
+        {/* Strategy section (shogi mobile) */}
+        <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box"}}>
+          <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>{playerLang==="en"?"Strategy":"ストラテジー"}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {(strategyShowAllS ? SHOGI_STRATEGY : SHOGI_STRATEGY.filter(s=>SHOGI_STRATEGY_FEATURED.includes(s.id))).map(s=>(
+              <button key={s.id} onClick={()=>setStrategyOpenS(s)}
+                style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?s.nameEn:s.nameJa}
+              </button>
+            ))}
+            {!strategyShowAllS && SHOGI_STRATEGY.length > SHOGI_STRATEGY_FEATURED.length && (
+              <button onClick={()=>setStrategyShowAllS(true)}
+                style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?"More ▸":"もっと見る ▸"}
+              </button>
+            )}
+          </div>
+        </div>
         <div style={{width:"100%",maxWidth:520,background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 14px",boxSizing:"border-box"}}>
           <div onClick={()=>setForbidOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
             <div style={{fontWeight:600,fontSize:16,color:"#3a2e22"}}>{playerLang==="en"?"Forbidden Moves":"反則ルール"}</div>
@@ -7396,6 +7676,11 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       {shogiVictoryModalEl}
       {tacticsResultModalElS}
       {tacticsDiffSelectModalS}
+      {strategyOpenS && (
+        <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
+          onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+        />
+      )}
     </>
   );
 }
