@@ -8,6 +8,8 @@ import AutoAnalyzer from "./AutoAnalyzer.jsx";
 import { CHESS_OPENINGS, SHOGI_OPENINGS, CHESS_TACTICS, SHOGI_TACTICS, uciMovesToChessHistory, usiMovesToShogiHistory } from "./openingsData.js";
 import { CHESS_STRATEGY, CHESS_STRATEGY_FEATURED } from "./data/strategy/chess-strategy.js";
 import { SHOGI_STRATEGY, SHOGI_STRATEGY_FEATURED } from "./data/strategy/shogi-strategy.js";
+import { CHESS_ENDGAME, CHESS_ENDGAME_FEATURED } from "./data/strategy/chess-endgame.js";
+import { SHOGI_ENDGAME, SHOGI_ENDGAME_FEATURED } from "./data/strategy/shogi-endgame.js";
 import { ChessEngine, boardToFen, uciToCoords, CHESS_AI_LEVELS } from "./chessEngine.js";
 // 将棋駒画像（Vite でバンドルに含める）
 import _sImg_ou     from "./assets/shogi/ou.png";
@@ -4798,6 +4800,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // Strategy modal
   const [strategyOpen, setStrategyOpen] = useState(null); // null | strategy theme object
   const [strategyShowAll, setStrategyShowAll] = useState(false);
+  // Endgame modal
+  const [endgameOpen, setEndgameOpen] = useState(null);
+  const [endgameShowAll, setEndgameShowAll] = useState(false);
   const [practiceRules, setPracticeRules] = useState({castling:true, enPassant:true, promotion:true});
   // Tactics mode
   const [tacticsMode, setTacticsMode] = useState(false);
@@ -6180,6 +6185,28 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 )}
               </div>
             </div>
+            {/* Endgame section (chess) */}
+            <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box",marginTop:4}}>
+              <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>
+                {playerLang==="en"?"Endgame":"エンドゲーム"}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {(endgameShowAll ? CHESS_ENDGAME : CHESS_ENDGAME.filter(s=>CHESS_ENDGAME_FEATURED.includes(s.id))).map(s=>(
+                  <button key={s.id} onClick={()=>setEndgameOpen(s)}
+                    style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#eddcb8"}
+                    onMouseLeave={e=>e.currentTarget.style.background="#fdf6e8"}>
+                    {playerLang==="en"?s.nameEn:s.nameJa}
+                  </button>
+                ))}
+                {!endgameShowAll && CHESS_ENDGAME.length > CHESS_ENDGAME_FEATURED.length && (
+                  <button onClick={()=>setEndgameShowAll(true)}
+                    style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                    {playerLang==="en"?"More ▸":"もっと見る ▸"}
+                  </button>
+                )}
+              </div>
+            </div>
             <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 14px",boxSizing:"border-box",marginTop:4}}>
               <div onClick={()=>setDiffOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
                 <div style={{fontWeight:600,fontSize:16,color:"#3a2e22"}}>{playerLang==="en"?"Differences from Shogi":"将棋との違い"}</div>
@@ -6200,6 +6227,18 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
               onPractice={(theme)=>{
                 setStrategyOpen(null);
+                const tTheme=theme.tacticTheme;
+                const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
+                const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
+                if(onOpenTactic) onOpenTactic(matchingTactic||fallback,"chess");
+                else setTacticsDiffSelect(true);
+              }}
+            />
+          )}
+          {endgameOpen && (
+            <StrategyModal theme={endgameOpen} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpen(null)}
+              onPractice={(theme)=>{
+                setEndgameOpen(null);
                 const tTheme=theme.tacticTheme;
                 const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
                 const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
@@ -6334,6 +6373,24 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             )}
           </div>
         </div>
+        {/* Endgame section (chess mobile) */}
+        <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box"}}>
+          <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>{playerLang==="en"?"Endgame":"エンドゲーム"}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {(endgameShowAll ? CHESS_ENDGAME : CHESS_ENDGAME.filter(s=>CHESS_ENDGAME_FEATURED.includes(s.id))).map(s=>(
+              <button key={s.id} onClick={()=>setEndgameOpen(s)}
+                style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?s.nameEn:s.nameJa}
+              </button>
+            ))}
+            {!endgameShowAll && CHESS_ENDGAME.length > CHESS_ENDGAME_FEATURED.length && (
+              <button onClick={()=>setEndgameShowAll(true)}
+                style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?"More ▸":"もっと見る ▸"}
+              </button>
+            )}
+          </div>
+        </div>
         {chessFormationsEl}
         <FormationModal modal={formationModal} setModal={setFormationModal} playerLang={playerLang} getShogiImg={null}/>
       </div>
@@ -6350,6 +6407,25 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           onPractice={(theme)=>{
             setStrategyOpen(null);
             // Map tacticTheme to tactics start
+            if (onOpenTactic) {
+              const tTheme = theme.tacticTheme;
+              const matchingTactic = tTheme ? CHESS_TACTICS.find(tt=>tt.id===tTheme) : null;
+              const fallback = CHESS_TACTICS.find(tt=>!tt.direct) || CHESS_TACTICS[0];
+              onOpenTactic(matchingTactic||fallback, "chess");
+            } else {
+              setTacticsDiffSelect(true);
+            }
+          }}
+        />
+      )}
+      {endgameOpen && (
+        <StrategyModal
+          theme={endgameOpen}
+          playerLang={playerLang}
+          serif={serif}
+          onClose={()=>setEndgameOpen(null)}
+          onPractice={(theme)=>{
+            setEndgameOpen(null);
             if (onOpenTactic) {
               const tTheme = theme.tacticTheme;
               const matchingTactic = tTheme ? CHESS_TACTICS.find(tt=>tt.id===tTheme) : null;
@@ -6452,6 +6528,9 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // Strategy modal
   const [strategyOpenS, setStrategyOpenS] = useState(null);
   const [strategyShowAllS, setStrategyShowAllS] = useState(false);
+  // Endgame modal
+  const [endgameOpenS, setEndgameOpenS] = useState(null);
+  const [endgameShowAllS, setEndgameShowAllS] = useState(false);
   const serif = "'Cormorant Garamond','Zen Old Mincho',Georgia,serif";
   const [fullScreen, setFullScreen] = useState(startInFullScreen||false);
   useEffect(()=>{ if(startInFullScreen && onFsConsumed) onFsConsumed(); },[]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -7507,6 +7586,28 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 )}
               </div>
             </div>
+            {/* Endgame section (shogi desktop) */}
+            <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box",marginTop:4}}>
+              <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>
+                {playerLang==="en"?"Endgame":"エンドゲーム"}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {(endgameShowAllS ? SHOGI_ENDGAME : SHOGI_ENDGAME.filter(s=>SHOGI_ENDGAME_FEATURED.includes(s.id))).map(s=>(
+                  <button key={s.id} onClick={()=>setEndgameOpenS(s)}
+                    style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#eddcb8"}
+                    onMouseLeave={e=>e.currentTarget.style.background="#fdf6e8"}>
+                    {playerLang==="en"?s.nameEn:s.nameJa}
+                  </button>
+                ))}
+                {!endgameShowAllS && SHOGI_ENDGAME.length > SHOGI_ENDGAME_FEATURED.length && (
+                  <button onClick={()=>setEndgameShowAllS(true)}
+                    style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                    {playerLang==="en"?"More ▸":"もっと見る ▸"}
+                  </button>
+                )}
+              </div>
+            </div>
             <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 14px",boxSizing:"border-box",marginTop:4}}>
               <div onClick={()=>setDiffOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
                 <div style={{fontWeight:600,fontSize:16,color:"#3a2e22"}}>{playerLang==="en"?"Differences from Chess":"チェスとの違い"}</div>
@@ -7538,6 +7639,11 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           {strategyOpenS && (
             <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
               onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+            />
+          )}
+          {endgameOpenS && (
+            <StrategyModal theme={endgameOpenS} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpenS(null)}
+              onPractice={(theme)=>{ setEndgameOpenS(null); setTacticsModeS(true); }}
             />
           )}
         </>
@@ -7579,6 +7685,11 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         {strategyOpenS && (
           <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
             onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+          />
+        )}
+        {endgameOpenS && (
+          <StrategyModal theme={endgameOpenS} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpenS(null)}
+            onPractice={(theme)=>{ setEndgameOpenS(null); setTacticsModeS(true); }}
           />
         )}
       </>
@@ -7659,6 +7770,24 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             )}
           </div>
         </div>
+        {/* Endgame section (shogi mobile) */}
+        <div style={{width:"100%",background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 12px",boxSizing:"border-box"}}>
+          <div style={{fontSize:14,letterSpacing:"1.5px",color:"#a89070",textTransform:"uppercase",marginBottom:5,fontFamily:serif}}>{playerLang==="en"?"Endgame":"エンドゲーム"}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {(endgameShowAllS ? SHOGI_ENDGAME : SHOGI_ENDGAME.filter(s=>SHOGI_ENDGAME_FEATURED.includes(s.id))).map(s=>(
+              <button key={s.id} onClick={()=>setEndgameOpenS(s)}
+                style={{background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:14,color:"#5a3e28",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?s.nameEn:s.nameJa}
+              </button>
+            ))}
+            {!endgameShowAllS && SHOGI_ENDGAME.length > SHOGI_ENDGAME_FEATURED.length && (
+              <button onClick={()=>setEndgameShowAllS(true)}
+                style={{background:"transparent",border:"1px solid #c8b090",borderRadius:14,color:"#7a5838",padding:"2px 10px",cursor:"pointer",fontSize:15,fontFamily:serif,whiteSpace:"nowrap"}}>
+                {playerLang==="en"?"More ▸":"もっと見る ▸"}
+              </button>
+            )}
+          </div>
+        </div>
         <div style={{width:"100%",maxWidth:520,background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"8px 14px",boxSizing:"border-box"}}>
           <div onClick={()=>setForbidOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
             <div style={{fontWeight:600,fontSize:16,color:"#3a2e22"}}>{playerLang==="en"?"Forbidden Moves":"反則ルール"}</div>
@@ -7679,6 +7808,11 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       {strategyOpenS && (
         <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
           onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+        />
+      )}
+      {endgameOpenS && (
+        <StrategyModal theme={endgameOpenS} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpenS(null)}
+          onPractice={(theme)=>{ setEndgameOpenS(null); setTacticsModeS(true); }}
         />
       )}
     </>
