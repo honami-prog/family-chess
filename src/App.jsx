@@ -5442,6 +5442,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       setLastMove({ from: [fr, fc], to: [tr, tc] });
       setChessTurn(prev => prev === 'w' ? 'b' : 'w');
       setSel(null); setLegal([]);
+      // Reset hint/answer display for the next player turn
+      setTacticsHintUsed(false);
+      setTacticsShowAnswer(false);
       setTacticsStep(prev => {
         const next = prev + 1;
         return next;
@@ -6665,6 +6668,9 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       setCap(newCap);
       setLastMoveSh(oppSol.drop ? { drop: true, to: oppSol.to } : { from: oppSol.from, to: oppSol.to });
       oppMoveStateRef.current = null;
+      // Reset hint/answer display for the next player turn
+      setTacticsHintUsedS(false);
+      setTacticsShowAnswerS(false);
       setTacticsSolStepS(step + 1);
     }, 700);
     return () => clearTimeout(timer);
