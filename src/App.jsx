@@ -4666,6 +4666,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsHintUsed, setTacticsHintUsed] = useState(false);
   const [tacticsShowAnswer, setTacticsShowAnswer] = useState(false);
   const [tacticsDiffSelect, setTacticsDiffSelect] = useState(false);
+  const [tacticsMovesFilter, setTacticsMovesFilter] = useState(null); // null=all | 1 | 2 | 3 | '4+'
   const [tacticsAttempt, setTacticsAttempt] = useState(0);
   const [tacticsStep, setTacticsStep] = useState(0); // current move index in puzzle.moves (0=player, 1=opp, 2=player…)
   const [tacticsLoading, setTacticsLoading] = useState(false);
@@ -5220,17 +5221,37 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const SEEN_KEY = 'chess_tactics_seen';
   const PUZZLE_CACHE_KEY = 'chess_tactics_cache'; // last 5 puzzles for offline fallback
 
-  const fetchTacticsPuzzle = useCallback(async (diff, theme, { onStatus } = {}) => {
+  // movesFilter: null=all | 1 | 2 | 3 | '4+'
+  // Server-side: if no theme set, use mateIn* to narrow results at API level
+  // Client-side: if theme set, fetch then filter by solution length (retry up to 12 times)
+  const fetchTacticsPuzzle = useCallback(async (diff, theme, movesFilter, { onStatus } = {}) => {
     const lichessDiff = LICHESS_DIFF[diff];
     const base = 'https://lichess.org/api/puzzle/next';
     const params = new URLSearchParams();
     if (lichessDiff) params.set('difficulty', lichessDiff);
-    if (theme) params.set('themes', theme);
+
+    // Determine API theme: if movesFilter set and no user theme → use mateIn* server-side
+    const MATE_THEMES = { 1: 'mateIn1', 2: 'mateIn2', 3: 'mateIn3', '4+': 'mateIn4' };
+    const apiTheme = (movesFilter !== null && !theme) ? (MATE_THEMES[movesFilter] || null) : theme;
+    if (apiTheme) params.set('themes', apiTheme);
+
+    // Client-side length check function
+    const movesOk = (len) => {
+      if (movesFilter === null) return true;
+      if (movesFilter === 1) return len === 1;
+      if (movesFilter === 2) return len === 3;
+      if (movesFilter === 3) return len === 5;
+      if (movesFilter === '4+') return len >= 7;
+      return true;
+    };
+
     const url = params.toString() ? `${base}?${params}` : base;
     const seen = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'));
     let rate429 = 0;
+    // More retries when client-side filtering is needed (theme + movesFilter combo)
+    const maxAttempts = (theme && movesFilter !== null) ? 15 : 8;
 
-    for (let attempt = 0; attempt < 8; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let resp;
       try {
         resp = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -5292,6 +5313,14 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         : [];
       console.log('[Tactics] puzzle id:', p.id, '| moves:', movesArr, '| count:', movesArr.length);
 
+      // Client-side moves-count filter: skip and retry if length doesn't match
+      if (!movesOk(movesArr.length)) {
+        seen.add(p.id); // mark as seen to avoid re-fetching same puzzle
+        localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
+        await new Promise(r => setTimeout(r, 150));
+        continue;
+      }
+
       const puzzle = {
         id: `lichess_${p.id}`,
         difficulty: diff || 'Normal',
@@ -5336,6 +5365,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         tacticsRestoredRef.current = true;
         setTacticsDiff(saved.diff ?? null);
         setTacticsTheme(saved.theme ?? null);
+        setTacticsMovesFilter(saved.movesFilter ?? null);
         setTacticsPuzzles([puzzle]);
         setTacticsIdx(0);
         setTacticsMode(true);
@@ -5350,10 +5380,10 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       const cur = tacticsPuzzles[tacticsIdx];
       if (!cur) return;
       localStorage.setItem('chess_tactics_session', JSON.stringify({
-        diff: tacticsDiff, theme: tacticsTheme, puzzle: cur, idx: 0,
+        diff: tacticsDiff, theme: tacticsTheme, movesFilter: tacticsMovesFilter, puzzle: cur, idx: 0,
       }));
     } catch {}
-  }, [tacticsMode, tacticsDiff, tacticsTheme, tacticsPuzzles, tacticsIdx]);
+  }, [tacticsMode, tacticsDiff, tacticsTheme, tacticsMovesFilter, tacticsPuzzles, tacticsIdx]);
 
   // Fetch first puzzle when tactics mode starts (or difficulty changes)
   useEffect(() => {
@@ -5365,7 +5395,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setTacticsLoading(true);
     setTacticsError(null);
     setTacticsStatusMsg(null);
-    fetchTacticsPuzzle(tacticsDiff, tacticsTheme, {
+    fetchTacticsPuzzle(tacticsDiff, tacticsTheme, tacticsMovesFilter, {
       onStatus: msg => setTacticsStatusMsg(msg),
     }).then(puzzle => {
       setTacticsPuzzles([puzzle]);
@@ -5422,7 +5452,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setTacticsError(null);
     setTacticsStatusMsg(null);
     setTacticsResult(null);
-    fetchTacticsPuzzle(tacticsDiff, tacticsTheme, {
+    fetchTacticsPuzzle(tacticsDiff, tacticsTheme, tacticsMovesFilter, {
       onStatus: msg => setTacticsStatusMsg(msg),
     }).then(p => {
       setTacticsPuzzles(prev => [...prev, p]);
@@ -5434,7 +5464,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       setTacticsStatusMsg(null);
       setTacticsError(err.message);
     });
-  }, [tacticsDiff, tacticsTheme, fetchTacticsPuzzle]);
+  }, [tacticsDiff, tacticsTheme, tacticsMovesFilter, fetchTacticsPuzzle]);
 
   const saveTacticsFb = useCallback(async (puzzle, result, hintUsed, attemptCount) => {
     if (!playerName || !puzzle) return;
@@ -5718,6 +5748,29 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           })}
         </div>
 
+        {/* ── 手数 ── */}
+        <div style={{fontSize:16,fontWeight:700,color:"#7a5838",marginBottom:10,letterSpacing:1}}>
+          {playerLang==="en"?"Moves":"手数"}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:20}}>
+          {[
+            { val: null,  ja: "すべて", en: "All" },
+            { val: 1,     ja: "1手",    en: "1 move" },
+            { val: 2,     ja: "2手",    en: "2 moves" },
+            { val: 3,     ja: "3手",    en: "3 moves" },
+            { val: '4+',  ja: "4手以上", en: "4+ moves" },
+          ].map(({ val, ja, en }) => {
+            const active = tacticsMovesFilter === val;
+            return (
+              <button key={String(val)} onClick={() => setTacticsMovesFilter(val)}
+                style={{border:`1.5px solid ${active?"transparent":"#c8b090"}`,borderRadius:8,padding:"7px 2px",fontSize:12,cursor:"pointer",fontFamily:serif,
+                  background:active?"#6a8abf":"transparent",color:active?"#fff":"#7a5838",fontWeight:active?700:400,transition:"background 0.15s",whiteSpace:"nowrap"}}>
+                {playerLang==="en"?en:ja}
+              </button>
+            );
+          })}
+        </div>
+
         {/* ── ボタン ── */}
         <button onClick={()=>{
           setTacticsDiffSelect(false);
@@ -5733,6 +5786,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   ) : null;
 
   const tacThemeLabel = tacticsTheme ? (TACTICS_THEMES.find(t=>t.id===tacticsTheme)?.[playerLang==="en"?"en":"ja"] ?? tacticsTheme) : null;
+  const tacMovesLabel = tacticsMovesFilter !== null
+    ? (playerLang==="en"
+        ? (tacticsMovesFilter === '4+' ? '4+ moves' : `${tacticsMovesFilter} move${tacticsMovesFilter > 1 ? 's' : ''}`)
+        : (tacticsMovesFilter === '4+' ? '4手以上' : `${tacticsMovesFilter}手`))
+    : null;
   const tacticsHeaderEl = tacticsMode && (tacCurPuzzle || tacticsLoading) ? (
     <div style={{fontFamily:serif,textAlign:"center",padding:"6px 0 2px"}}>
       {tacCurPuzzle && <>
@@ -5740,6 +5798,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           {tacCurPuzzle.difficulty}
         </span>
         {tacThemeLabel && <span style={{background:"#6a7a9a",color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:600,marginRight:6}}>{tacThemeLabel}</span>}
+        {tacMovesLabel && <span style={{background:"#6a8abf",color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:600,marginRight:6}}>{tacMovesLabel}</span>}
         {tacCurPuzzle.rating && <span style={{fontSize:13,color:"#9a7848"}}>★{tacCurPuzzle.rating}</span>}
         <div style={{fontSize:15,color:"#5a3c18",marginTop:3}}>
           {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
@@ -5754,7 +5813,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <span style={{fontFamily:serif,fontSize:14,color:"#c04040",alignSelf:"center"}}>{playerLang==="en"?"Failed to load puzzle":"問題を読み込めませんでした"}</span>
         <button onClick={()=>{
           setTacticsError(null); setTacticsLoading(true); setTacticsStatusMsg(null); setTacticsResult(null);
-          fetchTacticsPuzzle(tacticsDiff, tacticsTheme, { onStatus: msg => setTacticsStatusMsg(msg) })
+          fetchTacticsPuzzle(tacticsDiff, tacticsTheme, tacticsMovesFilter, { onStatus: msg => setTacticsStatusMsg(msg) })
             .then(p=>{ setTacticsPuzzles(prev=>[...prev,p]); setTacticsIdx(prev=>prev+1); setTacticsLoading(false); setTacticsStatusMsg(null); })
             .catch(e=>{ setTacticsLoading(false); setTacticsStatusMsg(null); setTacticsError(e.message); });
         }} style={{...btnStyle,background:"#c8a86a",color:"#fff",border:"none"}}>{playerLang==="en"?"Retry":"再試行"}</button>
@@ -5841,7 +5900,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <div ref={fsAreaRefCb} style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"4px",overflow:"hidden",boxSizing:"border-box"}}>
           <div style={{width:bwStr}}>
             {tacticsMode && tacCurPuzzle && <div style={{color:"#fff",fontSize:14,fontFamily:serif,textAlign:"center",marginBottom:4,opacity:0.9}}>
-              {playerLang==="en"?`Puzzle #${tacticsIdx+1}`:`問題 ${tacticsIdx+1}問目`} · {tacCurPuzzle.difficulty} · {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
+              {playerLang==="en"?`Puzzle #${tacticsIdx+1}`:`問題 ${tacticsIdx+1}問目`} · {tacCurPuzzle.difficulty}{tacMovesLabel ? ` · ${tacMovesLabel}` : ''} · {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
             </div>}
             <div style={{transform:"rotate(180deg)"}}><ChessCapRow capColor="b"/></div>
             {boardEl}
