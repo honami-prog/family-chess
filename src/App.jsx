@@ -4712,8 +4712,16 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
   const lvlLabel = ({beginner:{ja:"初級",en:"Beginner"},intermediate:{ja:"中級",en:"Intermediate"},advanced:{ja:"上級",en:"Advanced"}}[theme.level]||{})[playerLang==="en"?"en":"ja"]||theme.level;
   const catLabel = playerLang==="en" ? theme.categoryEn : theme.category;
   const navBtn = {background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:6,color:"#7a5838",padding:"4px 10px",cursor:"pointer",fontSize:16,fontFamily:serif};
-  // Font sizes matching Opening modal: 17px body (EN fine-weight font reads large; JA reads large at 16px too)
+  // Font sizes matching Opening modal
   const bodyFs = playerLang==="en" ? 17 : 16;
+  // Practice button: only show for themes with a valid 1-to-1 Lichess tactics theme mapping
+  const VALID_TACTIC_IDS = new Set(['fork','pin','sacrifice','skewer','discoveredAttack','doubleCheck','deflection','decoy','endgame']);
+  const canPractice = onPractice && theme.tacticTheme && VALID_TACTIC_IDS.has(theme.tacticTheme);
+  // Coordinate label style — matches main chess board (color, font, opacity)
+  const coordFs = Math.max(9, Math.floor(cellSize * 0.18));
+  const coordW = Math.max(12, Math.floor(cellSize * 0.25));
+  const coordH = Math.max(10, Math.floor(cellSize * 0.22));
+  const coordLbl = {display:"flex",alignItems:"center",justifyContent:"center",color:"#7a5c38",fontSize:coordFs,fontFamily:"Georgia,serif",userSelect:"none",opacity:0.72,fontWeight:400,letterSpacing:"0.04em"};
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9900,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"10px 0",fontFamily:serif}}
@@ -4738,26 +4746,44 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
           {playerLang==="en"?theme.descriptionEn:theme.descriptionJa}
         </div>
 
-        {/* Board (only for chess with FEN) */}
+        {/* Board with coordinates (only for chess with FEN) */}
         {board && (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:12}}>
-            <div style={{border:"2px solid #8b6040",borderRadius:3,overflow:"hidden",display:"inline-block",width:boardW,height:boardW,flexShrink:0}}>
-              <div style={{display:"grid",gridTemplateColumns:`repeat(8,${cellSize}px)`,gridTemplateRows:`repeat(8,${cellSize}px)`}}>
-                {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
-                  const isLight=(r+c)%2===0;
-                  const piece=board[r]?.[c];
-                  const isHlFrom=lastFrom&&lastFrom[0]===r&&lastFrom[1]===c;
-                  const isHlTo=lastTo&&lastTo[0]===r&&lastTo[1]===c;
-                  const bg=(isHlFrom||isHlTo)?(isLight?"#f6f669":"#baca2b"):(isLight?"#f0d9b5":"#b58863");
-                  return (
-                    <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      {piece&&<img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>}
-                    </div>
-                  );
-                }))}
+            {/* Board + rank/file labels */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start"}}>
+              <div style={{display:"flex"}}>
+                {/* Rank labels (8→1, left side) */}
+                <div style={{display:"flex",flexDirection:"column",width:coordW,marginRight:2}}>
+                  {[8,7,6,5,4,3,2,1].map(n=>(
+                    <div key={n} style={{...coordLbl,height:cellSize}}>{n}</div>
+                  ))}
+                </div>
+                {/* Chess board */}
+                <div style={{border:"2px solid #8b6040",borderRadius:3,overflow:"hidden"}}>
+                  <div style={{display:"grid",gridTemplateColumns:`repeat(8,${cellSize}px)`,gridTemplateRows:`repeat(8,${cellSize}px)`}}>
+                    {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
+                      const isLight=(r+c)%2===0;
+                      const piece=board[r]?.[c];
+                      const isHlFrom=lastFrom&&lastFrom[0]===r&&lastFrom[1]===c;
+                      const isHlTo=lastTo&&lastTo[0]===r&&lastTo[1]===c;
+                      const bg=(isHlFrom||isHlTo)?(isLight?"#f6f669":"#baca2b"):(isLight?"#f0d9b5":"#b58863");
+                      return (
+                        <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          {piece&&<img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>}
+                        </div>
+                      );
+                    }))}
+                  </div>
+                </div>
+              </div>
+              {/* File labels (a→h, bottom) */}
+              <div style={{display:"flex",marginLeft:coordW+2}}>
+                {["a","b","c","d","e","f","g","h"].map(f=>(
+                  <div key={f} style={{...coordLbl,width:cellSize,height:coordH,marginTop:2}}>{f}</div>
+                ))}
               </div>
             </div>
-            <div style={{marginTop:8,fontSize:bodyFs,color:"#6a4820",textAlign:"center",minHeight:20,padding:"0 4px",lineHeight:1.55}}>{comment}</div>
+            <div style={{marginTop:6,fontSize:bodyFs,color:"#6a4820",textAlign:"center",minHeight:20,padding:"0 4px",lineHeight:1.55}}>{comment}</div>
             <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
               <button onClick={()=>setStep(0)} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀◀</button>
               <button onClick={()=>setStep(s=>Math.max(0,s-1))} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀</button>
@@ -4778,8 +4804,8 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
           ))}
         </div>
 
-        {/* Practice button */}
-        {onPractice && (
+        {/* Practice button — only for themes with a valid 1-to-1 Lichess tactics theme */}
+        {canPractice && (
           <button onClick={()=>onPractice(theme)} style={{display:"block",width:"100%",background:"#c8a86a",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:serif,marginBottom:8}}>
             {playerLang==="en"?"Practice this theme →":"このテーマで練習する →"}
           </button>
@@ -6241,11 +6267,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
               onPractice={(theme)=>{
                 setStrategyOpen(null);
-                const tTheme=theme.tacticTheme;
-                const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
-                const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
-                if(onOpenTactic) onOpenTactic(matchingTactic||fallback,"chess");
-                else setTacticsDiffSelect(true);
+                setTacticsTheme(theme.tacticTheme);
+                setTacticsDiff(null);
+                setTacticsMovesFilter(null);
+                setVsAI(false);
+                setTacticsMode(true);
               }}
             />
           )}
@@ -6253,11 +6279,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             <StrategyModal theme={endgameOpen} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpen(null)}
               onPractice={(theme)=>{
                 setEndgameOpen(null);
-                const tTheme=theme.tacticTheme;
-                const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
-                const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
-                if(onOpenTactic) onOpenTactic(matchingTactic||fallback,"chess");
-                else setTacticsDiffSelect(true);
+                setTacticsTheme(theme.tacticTheme);
+                setTacticsDiff(null);
+                setTacticsMovesFilter(null);
+                setVsAI(false);
+                setTacticsMode(true);
               }}
             />
           )}
@@ -6302,11 +6328,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
             onPractice={(theme)=>{
               setStrategyOpen(null);
-              const tTheme=theme.tacticTheme;
-              const matchingTactic=tTheme?CHESS_TACTICS.find(tt=>tt.id===tTheme):null;
-              const fallback=CHESS_TACTICS.find(tt=>!tt.direct)||CHESS_TACTICS[0];
-              if(onOpenTactic) onOpenTactic(matchingTactic||fallback,"chess");
-              else setTacticsDiffSelect(true);
+              setTacticsTheme(theme.tacticTheme);
+              setTacticsDiff(null);
+              setTacticsMovesFilter(null);
+              setVsAI(false);
+              setTacticsMode(true);
             }}
           />
         )}
@@ -6420,15 +6446,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           onClose={()=>setStrategyOpen(null)}
           onPractice={(theme)=>{
             setStrategyOpen(null);
-            // Map tacticTheme to tactics start
-            if (onOpenTactic) {
-              const tTheme = theme.tacticTheme;
-              const matchingTactic = tTheme ? CHESS_TACTICS.find(tt=>tt.id===tTheme) : null;
-              const fallback = CHESS_TACTICS.find(tt=>!tt.direct) || CHESS_TACTICS[0];
-              onOpenTactic(matchingTactic||fallback, "chess");
-            } else {
-              setTacticsDiffSelect(true);
-            }
+            setTacticsTheme(theme.tacticTheme);
+            setTacticsDiff(null);
+            setTacticsMovesFilter(null);
+            setVsAI(false);
+            setTacticsMode(true);
           }}
         />
       )}
@@ -6440,14 +6462,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           onClose={()=>setEndgameOpen(null)}
           onPractice={(theme)=>{
             setEndgameOpen(null);
-            if (onOpenTactic) {
-              const tTheme = theme.tacticTheme;
-              const matchingTactic = tTheme ? CHESS_TACTICS.find(tt=>tt.id===tTheme) : null;
-              const fallback = CHESS_TACTICS.find(tt=>!tt.direct) || CHESS_TACTICS[0];
-              onOpenTactic(matchingTactic||fallback, "chess");
-            } else {
-              setTacticsDiffSelect(true);
-            }
+            setTacticsTheme(theme.tacticTheme);
+            setTacticsDiff(null);
+            setTacticsMovesFilter(null);
+            setVsAI(false);
+            setTacticsMode(true);
           }}
         />
       )}
@@ -7966,39 +7985,80 @@ function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, 
     );
   }, [currentMove, cellSize, boardW, isChess]);
 
-  // Render chess board
+  // Coordinate label style — matches main chess board style
+  const coordFs = Math.max(9, Math.floor(cellSize * 0.18));
+  const coordW  = Math.max(12, Math.floor(cellSize * 0.25));
+  const coordH  = Math.max(10, Math.floor(cellSize * 0.22));
+  const coordLbl = {display:"flex",alignItems:"center",justifyContent:"center",color:"#7a5c38",fontSize:coordFs,fontFamily:"Georgia,serif",userSelect:"none",opacity:0.72,fontWeight:400,letterSpacing:"0.04em"};
+
+  // Render chess board with rank/file coordinates
   const chessBoardEl = chessBoard && (
-    <div style={{position:"relative",width:boardW,height:boardW,flexShrink:0}}>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(8,${cellSize}px)`,gridTemplateRows:`repeat(8,${cellSize}px)`}}>
-        {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
-          const isLight = (r+c)%2===0;
-          const piece = chessBoard[r][c];
-          return (
-            <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:isLight?"#f0d9b5":"#b58863",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {piece && <img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"80%",height:"80%",objectFit:"contain",position:"relative",zIndex:1}}/>}
-            </div>
-          );
-        }))}
+    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start"}}>
+      <div style={{display:"flex"}}>
+        {/* Rank labels 8→1 on the left */}
+        <div style={{display:"flex",flexDirection:"column",width:coordW,marginRight:2}}>
+          {[8,7,6,5,4,3,2,1].map(n=>(
+            <div key={n} style={{...coordLbl,height:cellSize}}>{n}</div>
+          ))}
+        </div>
+        {/* Chess board */}
+        <div style={{position:"relative",width:boardW,height:boardW,flexShrink:0}}>
+          <div style={{display:"grid",gridTemplateColumns:`repeat(8,${cellSize}px)`,gridTemplateRows:`repeat(8,${cellSize}px)`}}>
+            {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
+              const isLight = (r+c)%2===0;
+              const piece = chessBoard[r][c];
+              return (
+                <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:isLight?"#f0d9b5":"#b58863",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {piece && <img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"80%",height:"80%",objectFit:"contain",position:"relative",zIndex:1}}/>}
+                </div>
+              );
+            }))}
+          </div>
+          {arrowEl}
+        </div>
       </div>
-      {arrowEl}
+      {/* File labels a→h on the bottom */}
+      <div style={{display:"flex",marginLeft:coordW+2}}>
+        {["a","b","c","d","e","f","g","h"].map(f=>(
+          <div key={f} style={{...coordLbl,width:cellSize,height:coordH,marginTop:2}}>{f}</div>
+        ))}
+      </div>
     </div>
   );
 
-  // Render shogi board
+  // Render shogi board with file/rank coordinates (9-1 columns, 1-9 rows)
+  const shogiBoardW = cellSize * 9;
   const shogiBoardEl = shogiBoard && (
-    <div style={{position:"relative",width:boardW,flexShrink:0}}>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(9,${cellSize}px)`,gridTemplateRows:`repeat(9,${cellSize}px)`,background:"#D4A888",gap:1}}>
-        {Array.from({length:9},(_,r)=>Array.from({length:9},(_,c)=>{
-          const piece = shogiBoard[r][c];
-          const src = piece ? getShogiImg(piece) : null;
-          return (
-            <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:"#D4A888",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #c49070"}}>
-              {src && <img src={src} alt="" style={{width:"85%",height:"85%",objectFit:"contain",transform:piece.color==="w"?"rotate(180deg)":"none",position:"relative",zIndex:1}}/>}
-            </div>
-          );
-        }))}
+    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start"}}>
+      <div style={{display:"flex"}}>
+        {/* Rank labels 1→9 on the left */}
+        <div style={{display:"flex",flexDirection:"column",width:coordW,marginRight:2}}>
+          {[1,2,3,4,5,6,7,8,9].map(n=>(
+            <div key={n} style={{...coordLbl,height:cellSize}}>{n}</div>
+          ))}
+        </div>
+        {/* Shogi board */}
+        <div style={{position:"relative",width:shogiBoardW,flexShrink:0}}>
+          <div style={{display:"grid",gridTemplateColumns:`repeat(9,${cellSize}px)`,gridTemplateRows:`repeat(9,${cellSize}px)`,background:"#D4A888",gap:1}}>
+            {Array.from({length:9},(_,r)=>Array.from({length:9},(_,c)=>{
+              const piece = shogiBoard[r][c];
+              const src = piece ? getShogiImg(piece) : null;
+              return (
+                <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:"#D4A888",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #c49070"}}>
+                  {src && <img src={src} alt="" style={{width:"85%",height:"85%",objectFit:"contain",transform:piece.color==="w"?"rotate(180deg)":"none",position:"relative",zIndex:1}}/>}
+                </div>
+              );
+            }))}
+          </div>
+          {arrowEl}
+        </div>
       </div>
-      {arrowEl}
+      {/* Column labels 9→1 on the bottom */}
+      <div style={{display:"flex",marginLeft:coordW+2}}>
+        {[9,8,7,6,5,4,3,2,1].map(n=>(
+          <div key={n} style={{...coordLbl,width:cellSize,height:coordH,marginTop:2}}>{n}</div>
+        ))}
+      </div>
     </div>
   );
 
