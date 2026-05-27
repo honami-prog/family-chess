@@ -4667,6 +4667,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsShowAnswer, setTacticsShowAnswer] = useState(false);
   const [tacticsDiffSelect, setTacticsDiffSelect] = useState(false);
   const [tacticsAttempt, setTacticsAttempt] = useState(0);
+  const [tacticsStep, setTacticsStep] = useState(0); // current move index in puzzle.moves (0=player, 1=opp, 2=player…)
   const [tacticsLoading, setTacticsLoading] = useState(false);
   const [tacticsError, setTacticsError] = useState(null);
   const [tacticsStatusMsg, setTacticsStatusMsg] = useState(null); // shown during 429 retry wait
@@ -4932,7 +4933,8 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       if (tacticsResult) return; // already resolved
       const tacPuzzle = tacticsPuzzles[tacticsIdx];
       if (!tacPuzzle) return;
-      const solUci = tacPuzzle.moves?.[0]; // first UCI move is the answer
+      const movesArr = normalizeMoves(tacPuzzle.moves);
+      const solUci = movesArr[tacticsStep]; // current player's move at this step
       // UCI → row/col: file a-h → col 0-7; rank 1-8 → row 7-0
       const uciFromRow = solUci ? 8 - parseInt(solUci[1]) : -1;
       const uciFromCol = solUci ? solUci.charCodeAt(0) - 97 : -1;
@@ -4946,17 +4948,24 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           const newAttempt = tacticsAttempt + 1;
           setTacticsAttempt(newAttempt);
           if (isCorrect) {
-            // Make the move visually
+            // Apply move visually
             const nb = board.map(row=>[...row]);
             nb[r][c] = board[sel.r][sel.c];
             nb[sel.r][sel.c] = null;
-            // Handle pawn promotion
             if (uciPromo) nb[r][c] = { type: uciPromo.toUpperCase(), color: nb[r][c].color };
             setBoard(nb);
             setLastMove({from:[sel.r,sel.c],to:[r,c]});
+            setChessTurn(prev => prev === 'w' ? 'b' : 'w');
             setSel(null); setLegal([]);
-            setTacticsResult('correct');
-            saveTacticsFb(tacPuzzle, 'correct', tacticsHintUsed, newAttempt);
+            const nextStep = tacticsStep + 1;
+            if (nextStep >= movesArr.length) {
+              // All moves complete – puzzle solved!
+              setTacticsResult('correct');
+              saveTacticsFb(tacPuzzle, 'correct', tacticsHintUsed, newAttempt);
+            } else {
+              // Opponent's response will be auto-applied by useEffect
+              setTacticsStep(nextStep);
+            }
           } else {
             setSel(null); setLegal([]);
             setTacticsResult('incorrect');
@@ -5123,6 +5132,35 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   }, []);
 
   // ── Tactics helpers ────────────────────────────────────────────────
+  // Normalize puzzle.moves to an array of UCI strings (Lichess returns solution as array,
+  // but defensively handle space-separated string format too)
+  const normalizeMoves = (moves) =>
+    Array.isArray(moves) ? moves
+    : typeof moves === 'string' ? moves.trim().split(/\s+/).filter(Boolean)
+    : [];
+
+  // Apply a UCI move (e.g. "e2e4" or "a7a8q") to a board snapshot and return new board
+  const applyUciMoveToBoard = (bd, uci) => {
+    const fc = uci.charCodeAt(0) - 97;
+    const fr = 8 - parseInt(uci[1]);
+    const tc = uci.charCodeAt(2) - 97;
+    const tr = 8 - parseInt(uci[3]);
+    const promo = uci[4]; // promotion piece letter or undefined
+    const nb = bd.map(row => [...row]);
+    const piece = nb[fr][fc];
+    if (!piece) return nb;
+    // En passant: pawn captures diagonally to empty square
+    if (piece.type === 'P' && fc !== tc && !nb[tr][tc]) nb[fr][tc] = null;
+    // Castling: king moves 2 squares → move rook
+    if (piece.type === 'K' && Math.abs(tc - fc) === 2) {
+      if (tc === 6) { nb[tr][5] = nb[tr][7]; nb[tr][7] = null; }
+      if (tc === 2) { nb[tr][3] = nb[tr][0]; nb[tr][0] = null; }
+    }
+    nb[tr][tc] = promo ? { type: promo.toUpperCase(), color: piece.color } : piece;
+    nb[fr][fc] = null;
+    return nb;
+  };
+
   // Parse FEN string into board array [{type,color}|null][8][8]
   const fenToBoard = (fen) => {
     const [placement, , , ] = fen.split(' ');
@@ -5174,6 +5212,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setTacticsHintUsed(false);
     setTacticsShowAnswer(false);
     setTacticsAttempt(0);
+    setTacticsStep(0);
   }, []);
 
   // ── Lichess puzzle fetcher ────────────────────────────────────────
@@ -5247,6 +5286,12 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       seen.add(p.id);
       localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
 
+      // Defensive: normalize solution to array (Lichess returns array, but guard against string)
+      const movesArr = Array.isArray(p.solution) ? p.solution
+        : typeof p.solution === 'string' ? p.solution.trim().split(/\s+/).filter(Boolean)
+        : [];
+      console.log('[Tactics] puzzle id:', p.id, '| moves:', movesArr, '| count:', movesArr.length);
+
       const puzzle = {
         id: `lichess_${p.id}`,
         difficulty: diff || 'Normal',
@@ -5254,7 +5299,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         titleEn: diff === 'Easy' ? 'Easy Tactics' : diff === 'Hard' ? 'Advanced Tactics' : 'Tactics',
         descJa: turn === 'w' ? '白番です。最善手を見つけてください。' : '黒番です。最善手を見つけてください。',
         descEn: turn === 'w' ? 'White to move. Find the best move.' : 'Black to move. Find the best move.',
-        turn, fen, moves: p.solution, rating: p.rating, themes: p.themes || [], hint,
+        turn, fen, moves: movesArr, rating: p.rating, themes: p.themes || [], hint,
       };
 
       // Save to puzzle cache (keep last 5 for offline fallback)
@@ -5341,6 +5386,35 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   }, [tacticsMode, tacticsPuzzles, tacticsIdx, loadTacticsPuzzle]);
 
   // (prefetch removed – fetching on-demand in handleTacticsNext avoids rate-limit bursts)
+
+  // Auto-apply opponent's response when tacticsStep is odd (opponent's turn)
+  useEffect(() => {
+    if (!tacticsMode || tacticsResult) return;
+    const puzzle = tacticsPuzzles[tacticsIdx];
+    if (!puzzle) return;
+    const movesArr = normalizeMoves(puzzle.moves);
+    if (tacticsStep % 2 === 0) return; // even step = player's turn, nothing to auto-apply
+    if (tacticsStep >= movesArr.length) {
+      // No more moves – last move was player's, puzzle complete
+      return;
+    }
+    const oppUci = movesArr[tacticsStep];
+    const fc = oppUci.charCodeAt(0) - 97;
+    const fr = 8 - parseInt(oppUci[1]);
+    const tc = oppUci.charCodeAt(2) - 97;
+    const tr = 8 - parseInt(oppUci[3]);
+    const timer = setTimeout(() => {
+      setBoard(prev => applyUciMoveToBoard(prev, oppUci));
+      setLastMove({ from: [fr, fc], to: [tr, tc] });
+      setChessTurn(prev => prev === 'w' ? 'b' : 'w');
+      setSel(null); setLegal([]);
+      setTacticsStep(prev => {
+        const next = prev + 1;
+        return next;
+      });
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [tacticsStep, tacticsMode, tacticsResult, tacticsPuzzles, tacticsIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Go to next puzzle ─────────────────────────────────────────────
   const handleTacticsNext = useCallback(() => {
@@ -5456,8 +5530,13 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
               const isLastFrom=lastMove&&lastMove.from[0]===r&&lastMove.from[1]===c;
               const isLastTo=lastMove&&lastMove.to[0]===r&&lastMove.to[1]===c;
               const tacPz = tacticsMode && tacticsPuzzles[tacticsIdx];
-              const isHintSq = tacticsMode && tacticsHintUsed && !tacticsResult && tacPz?.hint && tacPz.hint[0]===r && tacPz.hint[1]===c;
-              const _tacAnsUci = tacticsMode && tacticsShowAnswer && tacPz?.moves?.[0];
+              // Hint: show "to" square of current player move
+              const _tacCurMoves = tacPz ? normalizeMoves(tacPz.moves) : [];
+              const _tacCurUci = _tacCurMoves[tacticsStep];
+              const _tacHintTo = _tacCurUci && _tacCurUci.length >= 4
+                ? [8 - parseInt(_tacCurUci[3]), _tacCurUci.charCodeAt(2) - 97] : null;
+              const isHintSq = tacticsMode && tacticsHintUsed && !tacticsResult && _tacHintTo && _tacHintTo[0]===r && _tacHintTo[1]===c;
+              const _tacAnsUci = tacticsMode && tacticsShowAnswer && _tacCurUci;
               const isAnsSq = _tacAnsUci && (() => {
                 const fc=_tacAnsUci.charCodeAt(0)-97, fr=8-parseInt(_tacAnsUci[1]);
                 const tc=_tacAnsUci.charCodeAt(2)-97, tr=8-parseInt(_tacAnsUci[3]);
