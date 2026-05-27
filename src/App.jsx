@@ -6197,6 +6197,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsHintUsedS, setTacticsHintUsedS] = useState(false);
   const [tacticsShowAnswerS, setTacticsShowAnswerS] = useState(false);
   const [tacticsDiffSelectS, setTacticsDiffSelectS] = useState(false);
+  const [tacticsMoveFilterS, setTacticsMoveFilterS] = useState(null); // null=all | 1 | 3 | 5 (手詰め数)
   const [tacticsAttemptS, setTacticsAttemptS] = useState(0);
   const [tacticsLoadingS, setTacticsLoadingS] = useState(false);
   const [tacticsErrorS, setTacticsErrorS] = useState(null);
@@ -6542,6 +6543,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // ── Shogi Tactics helpers ──────────────────────────────────────
   const loadShogiTacticsPuzzle = useCallback((puzzle) => {
     if (!puzzle) return;
+    console.log('[ShogiTactics] puzzle id:', puzzle.id, '| mate:', puzzle.mate, '| moves:', puzzle.moves, '| solution count:', puzzle.solution?.length);
     const bd = puzzle.board.map(row => row.map(cell => cell ? {type:cell.t, color:cell.c, p:cell.p||false} : null));
     setBoard(bd);
     const handB = {}; const handW = {};
@@ -6568,6 +6570,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       if (saved && saved.idxS != null) {
         shogiRestoreIdxRef.current = saved.idxS;
         setTacticsDiffS(saved.diffS ?? null);
+        setTacticsMoveFilterS(saved.moveFilterS ?? null);
         setTacticsModeS(true);
       }
     } catch {}
@@ -6578,10 +6581,10 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     if (!tacticsModeS || !tacticsPuzzlesS.length) return;
     try {
       localStorage.setItem('shogi_tactics_session', JSON.stringify({
-        diffS: tacticsDiffS, idxS: tacticsIdxS,
+        diffS: tacticsDiffS, moveFilterS: tacticsMoveFilterS, idxS: tacticsIdxS,
       }));
     } catch {}
-  }, [tacticsModeS, tacticsDiffS, tacticsPuzzlesS, tacticsIdxS]);
+  }, [tacticsModeS, tacticsDiffS, tacticsMoveFilterS, tacticsPuzzlesS, tacticsIdxS]);
 
   useEffect(() => {
     if (!tacticsModeS) return;
@@ -6589,14 +6592,22 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     setTacticsErrorS(null);
     setTacticsPuzzlesS([]);
     setTacticsIdxS(0);
-    const _shogiFiles = tacticsDiffS === 'Easy' ? ['/puzzles/shogi/easy.json']
-      : tacticsDiffS === 'Normal' ? ['/puzzles/shogi/normal.json']
-      : tacticsDiffS === 'Hard' ? ['/puzzles/shogi/hard.json']
-      : ['/puzzles/shogi/easy.json','/puzzles/shogi/normal.json','/puzzles/shogi/hard.json'];
+    // tacticsMoveFilterS takes priority over tacticsDiffS for file selection
+    // mate:1→easy, mate:3→normal, mate:5→hard
+    const _shogiFiles = (() => {
+      if (tacticsMoveFilterS === 1) return ['/puzzles/shogi/easy.json'];
+      if (tacticsMoveFilterS === 3) return ['/puzzles/shogi/normal.json'];
+      if (tacticsMoveFilterS === 5) return ['/puzzles/shogi/hard.json'];
+      // Fall back to difficulty filter
+      if (tacticsDiffS === 'Easy')   return ['/puzzles/shogi/easy.json'];
+      if (tacticsDiffS === 'Normal') return ['/puzzles/shogi/normal.json'];
+      if (tacticsDiffS === 'Hard')   return ['/puzzles/shogi/hard.json'];
+      return ['/puzzles/shogi/easy.json','/puzzles/shogi/normal.json','/puzzles/shogi/hard.json'];
+    })();
     Promise.all(_shogiFiles.map(f => fetch(f).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })))
       .then(arrays => {
-        const data = arrays.flat();
-        if (data.length === 0) throw new Error(playerLang === 'en' ? 'No puzzles found for this difficulty.' : 'この難度の問題が見つかりません。');
+        let data = arrays.flat();
+        if (data.length === 0) throw new Error(playerLang === 'en' ? 'No puzzles found.' : 'この条件の問題が見つかりません。');
         // Shuffle puzzles for random order
         const list = [...data];
         for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
@@ -6612,7 +6623,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         setTacticsLoadingS(false);
       })
       .catch(err => { setTacticsLoadingS(false); setTacticsErrorS(err.message); });
-  }, [tacticsModeS, tacticsDiffS, playerLang]);
+  }, [tacticsModeS, tacticsDiffS, tacticsMoveFilterS, playerLang]);
 
   useEffect(() => {
     if (!tacticsModeS || !tacticsPuzzlesS.length) return;
@@ -6948,35 +6959,93 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   ) : null;
 
   const tacticsDiffSelectModalS = tacticsDiffSelectS ? (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:serif}}>
-      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:16,padding:"28px 32px",maxWidth:300,width:"88vw",textAlign:"center"}}>
-        <div style={{fontSize:20,fontWeight:700,color:"#3a2e22",marginBottom:16}}>{playerLang==="en"?"Select Difficulty":"難易度を選択"}</div>
-        {[null,'Easy','Normal','Hard'].map(d=>(
-          <button key={String(d)} onClick={()=>{
-            // Terminate any running AI before entering tactics mode
-            if(shogiWorkerRef.current){ shogiWorkerRef.current.terminate(); shogiWorkerRef.current=null; }
-            setAiThinking(false);
-            setTacticsDiffS(d); setTacticsDiffSelectS(false);
-            setTacticsModeS(true); setVsAI(false);
-          }} style={{...btnStyleS,display:"block",width:"100%",marginBottom:8,fontSize:17,background:tacticsDiffS===d?"#c8a86a":"transparent",color:tacticsDiffS===d?"#fff":"#7a5838"}}>
-            {d===null?(playerLang==="en"?"All / すべて":"すべて"):d}
-          </button>
-        ))}
-        <button onClick={()=>setTacticsDiffSelectS(false)} style={{...btnStyleS,marginTop:4,fontSize:15,color:"#9a8878"}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:serif,padding:"12px 0"}}>
+      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:16,padding:"24px 24px 20px",maxWidth:340,width:"92vw",maxHeight:"90vh",overflowY:"auto",boxSizing:"border-box"}}>
+
+        {/* ── 難易度 ── */}
+        <div style={{fontSize:16,fontWeight:700,color:"#7a5838",marginBottom:10,letterSpacing:1}}>
+          {playerLang==="en"?"Difficulty":"難易度"}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:18}}>
+          {[null,'Easy','Normal','Hard'].map(d=>{
+            const active = tacticsDiffS === d;
+            const label = d===null?(playerLang==="en"?"All":"すべて"):d;
+            const bg = active ? (d==='Easy'?"#4a9":d==='Hard'?"#d44":d==='Normal'?"#c90":"#c8a86a") : "transparent";
+            return (
+              <button key={String(d)} onClick={()=>setTacticsDiffS(d)}
+                style={{border:`1.5px solid ${active?"transparent":"#c8b090"}`,borderRadius:8,padding:"7px 0",fontSize:13,cursor:"pointer",fontFamily:serif,
+                  background:bg,color:active?"#fff":"#7a5838",fontWeight:active?700:400,transition:"background 0.15s"}}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── 手数 ── */}
+        <div style={{fontSize:16,fontWeight:700,color:"#7a5838",marginBottom:10,letterSpacing:1}}>
+          {playerLang==="en"?"Moves":"手数"}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:20}}>
+          {[
+            { val: null, ja: "すべて",  en: "All" },
+            { val: 1,    ja: "1手詰め", en: "Mate in 1" },
+            { val: 3,    ja: "3手詰め", en: "Mate in 3" },
+            { val: 5,    ja: "5手詰め", en: "Mate in 5" },
+          ].map(({ val, ja, en }) => {
+            const active = tacticsMoveFilterS === val;
+            return (
+              <button key={String(val)} onClick={() => setTacticsMoveFilterS(val)}
+                style={{border:`1.5px solid ${active?"transparent":"#c8b090"}`,borderRadius:8,padding:"7px 2px",fontSize:12,cursor:"pointer",fontFamily:serif,
+                  background:active?"#6a8abf":"transparent",color:active?"#fff":"#7a5838",fontWeight:active?700:400,transition:"background 0.15s",whiteSpace:"nowrap"}}>
+                {playerLang==="en"?en:ja}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── ボタン ── */}
+        <button onClick={()=>{
+          if(shogiWorkerRef.current){ shogiWorkerRef.current.terminate(); shogiWorkerRef.current=null; }
+          setAiThinking(false);
+          setTacticsDiffSelectS(false);
+          setTacticsModeS(true); setVsAI(false);
+        }} style={{...btnStyleS,display:"block",width:"100%",marginBottom:8,fontSize:16,background:"#c8a86a",color:"#fff",border:"none",fontWeight:700,borderRadius:10,padding:"11px 0"}}>
+          {playerLang==="en"?"Start":"スタート"}
+        </button>
+        <button onClick={()=>setTacticsDiffSelectS(false)} style={{...btnStyleS,display:"block",width:"100%",fontSize:14,color:"#9a8878",textAlign:"center"}}>
           {playerLang==="en"?"Cancel":"キャンセル"}
         </button>
       </div>
     </div>
   ) : null;
 
+  // Shogi tactics: moves filter label + progress indicator
+  const tacSMoveFilterLabel = tacticsMoveFilterS !== null
+    ? (playerLang==="en" ? `Mate in ${tacticsMoveFilterS}` : `${tacticsMoveFilterS}手詰め`)
+    : null;
+  // Progress: which player move are we on (0,2,4=player steps → 1st,2nd,3rd move)
+  const tacSPlayerMoveNum = Math.floor(tacticsSolStepS / 2) + 1;
+  const tacSMateNum = tacCurPuzzleS?.mate ?? (tacCurPuzzleS?.solution ? Math.ceil(tacCurPuzzleS.solution.length / 2) : null);
+
   const tacticsHeaderElS = tacticsModeS && tacCurPuzzleS ? (
     <div style={{fontFamily:serif,textAlign:"center",padding:"6px 0 2px"}}>
       <span style={{fontSize:15,color:"#7a5838",marginRight:8}}>
         {playerLang==="en"?`Puzzle #${tacticsIdxS+1}`:`問題 ${tacticsIdxS+1}問目`}
       </span>
-      <span style={{background:tacCurPuzzleS.difficulty==='Easy'?"#4a9":(tacCurPuzzleS.difficulty==='Hard'?"#d44":"#c90"),color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:13,fontWeight:600}}>
+      <span style={{background:tacCurPuzzleS.difficulty==='Easy'?"#4a9":(tacCurPuzzleS.difficulty==='Hard'?"#d44":"#c90"),color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:13,fontWeight:600,marginRight:6}}>
         {tacCurPuzzleS.difficulty}
       </span>
+      {tacSMoveFilterLabel && (
+        <span style={{background:"#6a8abf",color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:600,marginRight:6}}>{tacSMoveFilterLabel}</span>
+      )}
+      {/* Progress indicator: 1手目/3手詰め */}
+      {!tacticsResultS && tacSMateNum && tacSMateNum > 1 && (
+        <span style={{background:"rgba(100,80,40,0.12)",color:"#6a4820",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:600,marginRight:6}}>
+          {playerLang==="en"
+            ? `Move ${tacSPlayerMoveNum} / ${tacSMateNum}-move mate`
+            : `${tacSPlayerMoveNum}手目 / ${tacSMateNum}手詰め`}
+        </span>
+      )}
       <div style={{fontSize:14,color:"#3a7a3a",fontWeight:600,marginTop:4,background:"rgba(60,140,60,0.08)",borderRadius:6,padding:"2px 8px",display:"inline-block"}}>
         {tacCurPuzzleS.turn==="b"
           ? (playerLang==="en"?"▶ Sente (Black) to move — your pieces are at the BOTTOM ↓":"▶ あなたは先手（下側の駒）です")
