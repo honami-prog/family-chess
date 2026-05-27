@@ -4671,6 +4671,18 @@ function _stratApplyMove(bd, uci) {
 function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
   const [step, setStep] = useState(0);
 
+  // Responsive board size — same formula as OpeningDetailView
+  const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 600);
+  useEffect(() => {
+    const handler = () => setVw(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  // Same formula as Opening modal (Math.min(vw - 40, 520)), but capped to fit inside
+  // this modal's inner width (maxWidth:560 – padding:20*2 = 520)
+  const cellSize = Math.floor(Math.min(vw - 40, 520) / 8);
+  const boardW = cellSize * 8;
+
   // Pre-compute all board states
   const boards = useMemo(() => {
     if (!theme?.fen) return [];
@@ -4699,36 +4711,38 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
   const lvlColor = {beginner:"#4a9",intermediate:"#c90",advanced:"#d44"}[theme.level]||"#888";
   const lvlLabel = ({beginner:{ja:"初級",en:"Beginner"},intermediate:{ja:"中級",en:"Intermediate"},advanced:{ja:"上級",en:"Advanced"}}[theme.level]||{})[playerLang==="en"?"en":"ja"]||theme.level;
   const catLabel = playerLang==="en" ? theme.categoryEn : theme.category;
-  const navBtn = {background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:6,color:"#7a5838",padding:"4px 10px",cursor:"pointer",fontSize:15,fontFamily:serif};
+  const navBtn = {background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:6,color:"#7a5838",padding:"4px 10px",cursor:"pointer",fontSize:16,fontFamily:serif};
+  // Font sizes matching Opening modal: 17px body (EN fine-weight font reads large; JA reads large at 16px too)
+  const bodyFs = playerLang==="en" ? 17 : 16;
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:9900,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"10px 0",fontFamily:serif}}
       onClick={onClose}>
-      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:16,padding:"20px 20px 16px",maxWidth:400,width:"94vw",boxSizing:"border-box",margin:"auto"}}
+      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:16,padding:"20px 20px 16px",maxWidth:560,width:"94vw",boxSizing:"border-box",margin:"auto"}}
         onClick={e=>e.stopPropagation()}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
           <div>
-            <div style={{fontWeight:700,fontSize:18,color:"#3a2e22",marginBottom:4}}>
+            <div style={{fontWeight:700,fontSize:20,color:"#3a2e22",marginBottom:4}}>
               {playerLang==="en"?theme.nameEn:theme.nameJa}
             </div>
-            <span style={{background:lvlColor,color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:600,marginRight:6}}>{lvlLabel}</span>
-            <span style={{background:"rgba(100,80,40,0.1)",color:"#7a5838",borderRadius:8,padding:"1px 8px",fontSize:12,fontWeight:500}}>{catLabel}</span>
+            <span style={{background:lvlColor,color:"#fff",borderRadius:8,padding:"1px 8px",fontSize:13,fontWeight:600,marginRight:6}}>{lvlLabel}</span>
+            <span style={{background:"rgba(100,80,40,0.1)",color:"#7a5838",borderRadius:8,padding:"1px 8px",fontSize:13,fontWeight:500}}>{catLabel}</span>
           </div>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#7a5838",lineHeight:1,paddingLeft:8}}>✕</button>
         </div>
 
         {/* Description */}
-        <div style={{fontSize:14,color:"#5a3c18",lineHeight:1.75,marginBottom:14,whiteSpace:"pre-line"}}>
+        <div style={{fontSize:bodyFs,color:"#5a3c18",lineHeight:1.75,marginBottom:14,whiteSpace:"pre-line"}}>
           {playerLang==="en"?theme.descriptionEn:theme.descriptionJa}
         </div>
 
         {/* Board (only for chess with FEN) */}
         {board && (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:12}}>
-            <div style={{border:"2px solid #8b6040",borderRadius:3,overflow:"hidden",display:"inline-block"}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(8,38px)",gridTemplateRows:"repeat(8,38px)"}}>
+            <div style={{border:"2px solid #8b6040",borderRadius:3,overflow:"hidden",display:"inline-block",width:boardW,height:boardW,flexShrink:0}}>
+              <div style={{display:"grid",gridTemplateColumns:`repeat(8,${cellSize}px)`,gridTemplateRows:`repeat(8,${cellSize}px)`}}>
                 {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
                   const isLight=(r+c)%2===0;
                   const piece=board[r]?.[c];
@@ -4736,18 +4750,18 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
                   const isHlTo=lastTo&&lastTo[0]===r&&lastTo[1]===c;
                   const bg=(isHlFrom||isHlTo)?(isLight?"#f6f669":"#baca2b"):(isLight?"#f0d9b5":"#b58863");
                   return (
-                    <div key={`${r}-${c}`} style={{width:38,height:38,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
                       {piece&&<img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>}
                     </div>
                   );
                 }))}
               </div>
             </div>
-            <div style={{marginTop:6,fontSize:13,color:"#6a4820",textAlign:"center",minHeight:18,padding:"0 4px"}}>{comment}</div>
-            <div style={{display:"flex",gap:6,marginTop:6,alignItems:"center"}}>
+            <div style={{marginTop:8,fontSize:bodyFs,color:"#6a4820",textAlign:"center",minHeight:20,padding:"0 4px",lineHeight:1.55}}>{comment}</div>
+            <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
               <button onClick={()=>setStep(0)} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀◀</button>
               <button onClick={()=>setStep(s=>Math.max(0,s-1))} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀</button>
-              <span style={{fontSize:13,color:"#7a5838",minWidth:44,textAlign:"center"}}>{step} / {maxStep}</span>
+              <span style={{fontSize:16,color:"#7a5838",minWidth:48,textAlign:"center"}}>{step} / {maxStep}</span>
               <button onClick={()=>setStep(s=>Math.min(maxStep,s+1))} disabled={step>=maxStep} style={{...navBtn,opacity:step>=maxStep?0.35:1}}>▶</button>
               <button onClick={()=>setStep(maxStep)} disabled={step>=maxStep} style={{...navBtn,opacity:step>=maxStep?0.35:1}}>▶▶</button>
             </div>
@@ -4756,21 +4770,21 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
 
         {/* Key Points */}
         <div style={{background:"rgba(100,80,40,0.07)",borderRadius:8,padding:"10px 12px",marginBottom:14}}>
-          <div style={{fontWeight:700,fontSize:13,color:"#7a5838",marginBottom:6,letterSpacing:0.5}}>
+          <div style={{fontWeight:700,fontSize:16,color:"#7a5838",marginBottom:8,letterSpacing:0.5}}>
             {playerLang==="en"?"Key Points":"ポイント"}
           </div>
           {points.map((pt,i)=>(
-            <div key={i} style={{fontSize:13,color:"#5a3c18",marginBottom:i<points.length-1?4:0,lineHeight:1.55}}>{pt}</div>
+            <div key={i} style={{fontSize:bodyFs,color:"#5a3c18",marginBottom:i<points.length-1?6:0,lineHeight:1.6}}>{pt}</div>
           ))}
         </div>
 
         {/* Practice button */}
         {onPractice && (
-          <button onClick={()=>onPractice(theme)} style={{display:"block",width:"100%",background:"#c8a86a",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:serif,marginBottom:8}}>
+          <button onClick={()=>onPractice(theme)} style={{display:"block",width:"100%",background:"#c8a86a",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:serif,marginBottom:8}}>
             {playerLang==="en"?"Practice this theme →":"このテーマで練習する →"}
           </button>
         )}
-        <button onClick={onClose} style={{display:"block",width:"100%",background:"transparent",border:"1px solid #c8b090",borderRadius:10,padding:"8px 0",fontSize:14,color:"#9a8878",cursor:"pointer",fontFamily:serif}}>
+        <button onClick={onClose} style={{display:"block",width:"100%",background:"transparent",border:"1px solid #c8b090",borderRadius:10,padding:"8px 0",fontSize:15,color:"#9a8878",cursor:"pointer",fontFamily:serif}}>
           {playerLang==="en"?"Close":"閉じる"}
         </button>
       </div>
