@@ -22,16 +22,72 @@ import _sImg_ryuma  from "./assets/shogi/ryuma.png";
 import _sImg_narikin from "./assets/shogi/narikin.png";
 import _sImg_tokin  from "./assets/shogi/tokin.png";
 const _SHOGI_IMGS = { ou:_sImg_ou, gyoku:_sImg_gyoku, hisha:_sImg_hisha, kaku:_sImg_kaku, kin:_sImg_kin, gin:_sImg_gin, keima:_sImg_keima, kyosha:_sImg_kyosha, fuhyo:_sImg_fuhyo, ryuou:_sImg_ryuou, ryuma:_sImg_ryuma, narikin:_sImg_narikin, tokin:_sImg_tokin };
+// ── SE再生: Web Audio API (ambient mode) でバックグラウンド音楽を止めない ──
+// HTMLAudioElement.play() は iOS で音楽セッションを奪うため使用しない。
+// AudioContext は iOS Safari でデフォルト "ambient" カテゴリで動作し、
+// Spotify / Apple Music などのBGMと共存できる。
+let _audioCtx = null;
+const _audioBuffers = {};
+
+function _getAudioCtx() {
+  if (!_audioCtx) {
+    try {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (Ctor) _audioCtx = new Ctor();
+    } catch(e) {}
+  }
+  return _audioCtx;
+}
+
+function _dataUriToArrayBuffer(dataUri) {
+  const base64 = dataUri.split(',')[1];
+  const binary = atob(base64);
+  const buf = new ArrayBuffer(binary.length);
+  const view = new Uint8Array(buf);
+  for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
+  return buf;
+}
+
 // sounds.js はユーザー操作時に遅延読み込み（初期ロードでクラッシュしないよう）
 const playSound = (type) => {
   try {
-    import("./sounds.js").then(({ SOUND_MOVE, SOUND_CAPTURE, SOUND_CHECK, SOUND_WIN }) => {
+    import("./sounds.js").then(async ({ SOUND_MOVE, SOUND_CAPTURE, SOUND_CHECK, SOUND_WIN }) => {
       const src = { move: SOUND_MOVE, capture: SOUND_CAPTURE, check: SOUND_CHECK, win: SOUND_WIN }[type];
       if (!src) return;
-      const audio = new Audio(src);
-      audio.volume = 0.5;
-      const promise = audio.play();
-      if (promise) promise.catch(() => {});
+
+      const ctx = _getAudioCtx();
+      if (!ctx) {
+        // AudioContext 非対応環境のみ HTMLAudioElement にフォールバック
+        const audio = new Audio(src);
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+        return;
+      }
+
+      try {
+        // iOS 等: ユーザー操作タイミングで suspended → running に復帰
+        if (ctx.state === 'suspended') await ctx.resume();
+
+        // AudioBuffer をキャッシュ（初回のみデコード、以降は再利用）
+        if (!_audioBuffers[type]) {
+          _audioBuffers[type] = await ctx.decodeAudioData(_dataUriToArrayBuffer(src));
+        }
+
+        const source = ctx.createBufferSource();
+        const gain   = ctx.createGain();
+        gain.gain.value = 0.5;
+        source.buffer = _audioBuffers[type];
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        source.start(0);
+      } catch(e) {
+        // デコードエラー等: HTMLAudioElement にフォールバック
+        try {
+          const audio = new Audio(src);
+          audio.volume = 0.5;
+          audio.play().catch(() => {});
+        } catch(e2) {}
+      }
     }).catch(() => {});
   } catch(e) {}
 };
