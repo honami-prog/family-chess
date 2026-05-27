@@ -8356,7 +8356,8 @@ export default function App() {
           const histLen = (g.history||[]).length;
           const rawLastSeen = gameTabSeen[g.id] || 0;
           const lastSeen = histLen < rawLastSeen ? 0 : rawLastSeen;
-          const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing" && histLen > lastSeen;
+          const myChessColor = g.players?.white === playerName ? 'w' : 'b';
+          const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing" && histLen > lastSeen && g.turn === myChessColor;
           const hasMsgUpdate = isPlayerInGame && !!gameMsgUnread[g.id];
           const wMember = members.find(m => m.name === g.players?.white);
           const bMember = members.find(m => m.name === g.players?.black);
@@ -8443,7 +8444,8 @@ export default function App() {
     const shogiHistLen = (g.history||[]).length;
     const rawShogiLastSeen2 = shogiTabSeen[g.id] || 0;
     const shogiLastSeen = shogiHistLen < rawShogiLastSeen2 ? 0 : rawShogiLastSeen2;
-    const hasShogiGameUpdate = !isActive && isPlayerInShogiGame && g.status==="playing" && shogiHistLen > shogiLastSeen;
+    const myShogiColor = g.players?.black === playerName ? 'b' : 'w';
+    const hasShogiGameUpdate = !isActive && isPlayerInShogiGame && g.status==="playing" && shogiHistLen > shogiLastSeen && g.turn === myShogiColor;
     const hasShogiMsgUpdate = isPlayerInShogiGame && !!gameMsgUnread[g.id];
     const wMember = members.find(m => m.name === g.players?.white);
     const bMember = members.find(m => m.name === g.players?.black);
@@ -8622,7 +8624,8 @@ export default function App() {
                   const histLen = (g.history||[]).length;
                   const rawLastSeen = gameTabSeen[g.id] || 0;
                   const lastSeen = histLen < rawLastSeen ? 0 : rawLastSeen;
-                  const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing" && histLen > lastSeen;
+                  const myChessColor2 = g.players?.white === playerName ? 'w' : 'b';
+                  const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing" && histLen > lastSeen && g.turn === myChessColor2;
                   const wMember = members.find(m => m.name === g.players?.white);
                   const bMember = members.find(m => m.name === g.players?.black);
                   return (
@@ -8682,7 +8685,8 @@ export default function App() {
                   const shogiHistLen = (g.history||[]).length;
                   const rawShogiLastSeen = shogiTabSeen[g.id] || 0;
                   const shogiLastSeen = shogiHistLen < rawShogiLastSeen ? 0 : rawShogiLastSeen;
-                  const hasShogiUpdate = !isActive && isPlayerInShogi && g.status==="playing" && shogiHistLen > shogiLastSeen;
+                  const myShogiColor2 = g.players?.black === playerName ? 'b' : 'w';
+                  const hasShogiUpdate = !isActive && isPlayerInShogi && g.status==="playing" && shogiHistLen > shogiLastSeen && g.turn === myShogiColor2;
                   const wMember = members.find(m => m.name === g.players?.white);
                   const bMember = members.find(m => m.name === g.players?.black);
                   return (
@@ -9466,8 +9470,8 @@ export default function App() {
           overflow:"hidden",
         }}>
           {[
-            {icon:<img src="/pieces/bK.webp" style={{width:20,height:20,objectFit:"contain"}}/>, labelJa:"チェス",   labelEn:"Chess",   action: ()=>{ setAnalysisData(null); setOpeningData(null); setShowChat(false); setShowAnalysisList(false); setShowSettings(false); setShowPractice(false); switchView("chess"); }, active: !showChat&&!showAnalysisList&&!showPractice&&currentView==="chess", badge: (currentView!=="chess"||showPractice) && games.some((g,i)=>{ const isP=playerName&&(g.players?.white===playerName||g.players?.black===playerName); const hl=(g.history||[]).length; const ls=gameTabSeen[g.id]||0; return isP&&g.status==="playing"&&hl>(hl<ls?0:ls); }) ? "!" : null},
-            {icon:<img src={getShogiImg({type:"K",color:"b",p:false})} style={{width:20,height:20,objectFit:"contain"}}/>, labelJa:"将棋",     labelEn:"Shogi",   action: ()=>{ setAnalysisData(null); setOpeningData(null); setShowChat(false); setShowAnalysisList(false); setShowSettings(false); setShowPractice(false); switchView("shogi"); }, active: !showChat&&!showAnalysisList&&!showPractice&&currentView==="shogi", badge: (currentView!=="shogi"||showPractice) && shogiGames.some((g,i)=>{ const isP=playerName&&(g.players?.white===playerName||g.players?.black===playerName); const hl=(g.history||[]).length; const ls=shogiTabSeen[g.id]||0; return isP&&g.status==="playing"&&hl>(hl<ls?0:ls); }) ? "!" : null},
+            {icon:<img src="/pieces/bK.webp" style={{width:20,height:20,objectFit:"contain"}}/>, labelJa:"チェス",   labelEn:"Chess",   action: ()=>{ setAnalysisData(null); setOpeningData(null); setShowChat(false); setShowAnalysisList(false); setShowSettings(false); setShowPractice(false); switchView("chess"); }, active: !showChat&&!showAnalysisList&&!showPractice&&currentView==="chess", badge: (currentView!=="chess"||showPractice) && games.some((g,i)=>{ const isP=playerName&&(g.players?.white===playerName||g.players?.black===playerName); const hl=(g.history||[]).length; const ls=gameTabSeen[g.id]||0; const mc=g.players?.white===playerName?'w':'b'; return isP&&g.status==="playing"&&hl>(hl<ls?0:ls)&&g.turn===mc; }) ? "!" : null},
+            {icon:<img src={getShogiImg({type:"K",color:"b",p:false})} style={{width:20,height:20,objectFit:"contain"}}/>, labelJa:"将棋",     labelEn:"Shogi",   action: ()=>{ setAnalysisData(null); setOpeningData(null); setShowChat(false); setShowAnalysisList(false); setShowSettings(false); setShowPractice(false); switchView("shogi"); }, active: !showChat&&!showAnalysisList&&!showPractice&&currentView==="shogi", badge: (currentView!=="shogi"||showPractice) && shogiGames.some((g,i)=>{ const isP=playerName&&(g.players?.white===playerName||g.players?.black===playerName); const hl=(g.history||[]).length; const ls=shogiTabSeen[g.id]||0; const mc=g.players?.black===playerName?'b':'w'; return isP&&g.status==="playing"&&hl>(hl<ls?0:ls)&&g.turn===mc; }) ? "!" : null},
             {icon:"📖", labelJa:"練習", labelEn:"Practice", action: ()=>{ setAnalysisData(null); if(openingData){setOpeningData(null);return;} setOpeningData(null); setShowChat(false); setShowAnalysisList(false); setShowSettings(false); if(showPractice){setShowPractice(false);}else{setShowPractice(true);setPracticeType(currentView==="chess"?"chess":"shogi");} }, active: !showChat&&!showAnalysisList&&showPractice},
             {icon:"📊", labelJa:"解析", labelEn:"Analysis", action: ()=>{ setAnalysisData(null); setOpeningData(null); setShowChat(false); setShowSettings(false); openAnalysisList(); }, active: !showChat&&showAnalysisList, badge: hasAnalysisBadge?"●":null},
             {icon:"💬", labelJa:"チャット", labelEn:"Chat",    action: ()=>{ setAnalysisData(null); setOpeningData(null); setShowAnalysisList(false); setShowSettings(false); setShowChat(true); }, active: showChat, badge: chatUnread||null},
