@@ -8138,9 +8138,53 @@ function TacticsDetailView({ tacticsData, allTactics, playerLang, onClose, onOpe
   const { tactic, gameType } = tacticsData;
   const serif = "'Cormorant Garamond','Zen Old Mincho',Georgia,serif";
   const t = (ja, en) => playerLang === "en" ? en : ja;
+
+  const [step, setStep] = useState(0);
+
+  // Responsive board size — same formula as StrategyModal
+  const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 600);
+  useEffect(() => {
+    const handler = () => setVw(window.innerWidth);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  const cellSize = Math.floor(Math.min(vw - 40, 520) / 8);
+
+  // Pre-compute all board states
+  const boards = useMemo(() => {
+    if (!tactic?.fen) return [];
+    const states = [];
+    let bd = _stratFenToBoard(tactic.fen);
+    states.push(bd);
+    for (const uci of (tactic.moves || [])) {
+      bd = _stratApplyMove(bd, uci);
+      states.push(bd);
+    }
+    return states;
+  }, [tactic]);
+
+  // Reset step when tactic changes
+  useEffect(() => { setStep(0); }, [tactic?.id]);
+
+  const board = boards[step];
+  const lastMoveUci = step > 0 ? tactic.moves[step - 1] : null;
+  const lastFrom = lastMoveUci ? [8 - parseInt(lastMoveUci[1]), lastMoveUci.charCodeAt(0) - 97] : null;
+  const lastTo   = lastMoveUci ? [8 - parseInt(lastMoveUci[3]), lastMoveUci.charCodeAt(2) - 97] : null;
+  const comments = playerLang === "en" ? (tactic.moveComments?.en || []) : (tactic.moveComments?.ja || []);
+  const comment = comments[step] || "";
+  const maxStep = (tactic.moves || []).length;
+  const bodyFs = playerLang === "en" ? 17 : 16;
+  const navBtn = {background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:6,color:"#7a5838",padding:"4px 10px",cursor:"pointer",fontSize:16,fontFamily:serif};
+
+  // Coordinate label style — same as StrategyModal
+  const coordFs = Math.max(9, Math.floor(cellSize * 0.18));
+  const coordW = Math.max(12, Math.floor(cellSize * 0.25));
+  const coordH = Math.max(10, Math.floor(cellSize * 0.22));
+  const coordLbl = {display:"flex",alignItems:"center",justifyContent:"center",color:"#7a5c38",fontSize:coordFs,fontFamily:"Georgia,serif",userSelect:"none",opacity:0.72,fontWeight:400,letterSpacing:"0.04em"};
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(20,12,4,0.88)",zIndex:3000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"16px 8px 32px"}}>
-      <div style={{background:"#fdf8ef",borderRadius:14,maxWidth:480,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,0.5)",overflow:"hidden",fontFamily:serif}}>
+      <div style={{background:"#fdf8ef",borderRadius:14,maxWidth:560,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,0.5)",overflow:"hidden",fontFamily:serif}}>
         <div style={{display:"flex",alignItems:"center",padding:"14px 16px 10px",background:"#3a2414",gap:8}}>
           <div style={{flex:1,fontSize:20,fontWeight:700,color:"#f5ead8",letterSpacing:"0.04em"}}>
             {playerLang==="en"?tactic.nameEn:tactic.nameJa}
@@ -8148,11 +8192,61 @@ function TacticsDetailView({ tacticsData, allTactics, playerLang, onClose, onOpe
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#f5ead8",padding:"4px 12px",cursor:"pointer",fontSize:17,fontFamily:serif}}>✕</button>
         </div>
         <div style={{padding:"16px"}}>
+          {/* Description */}
           <div style={{background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
-            <div style={{fontSize:17,color:"#4a3020",lineHeight:1.7}}>
+            <div style={{fontSize:bodyFs,color:"#4a3020",lineHeight:1.7}}>
               {playerLang==="en" ? tactic.descEn : tactic.descJa}
             </div>
           </div>
+
+          {/* Board with coordinates (chess only) */}
+          {board && (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:14}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start"}}>
+                <div style={{display:"flex"}}>
+                  {/* Rank labels (8→1, left side) */}
+                  <div style={{display:"flex",flexDirection:"column",width:coordW,marginRight:2}}>
+                    {[8,7,6,5,4,3,2,1].map(n=>(
+                      <div key={n} style={{...coordLbl,height:cellSize}}>{n}</div>
+                    ))}
+                  </div>
+                  {/* Chess board */}
+                  <div style={{border:"2px solid #8b6040",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{display:"grid",gridTemplateColumns:`repeat(8,${cellSize}px)`,gridTemplateRows:`repeat(8,${cellSize}px)`}}>
+                      {Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>{
+                        const isLight=(r+c)%2===0;
+                        const piece=board[r]?.[c];
+                        const isHlFrom=lastFrom&&lastFrom[0]===r&&lastFrom[1]===c;
+                        const isHlTo=lastTo&&lastTo[0]===r&&lastTo[1]===c;
+                        const bg=(isHlFrom||isHlTo)?(isLight?"#f6f669":"#baca2b"):(isLight?"#f0d9b5":"#b58863");
+                        return (
+                          <div key={`${r}-${c}`} style={{width:cellSize,height:cellSize,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            {piece&&<img src={`/pieces/${piece.color}${piece.type}.webp`} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>}
+                          </div>
+                        );
+                      }))}
+                    </div>
+                  </div>
+                </div>
+                {/* File labels (a→h, bottom) */}
+                <div style={{display:"flex",marginLeft:coordW+2}}>
+                  {["a","b","c","d","e","f","g","h"].map(f=>(
+                    <div key={f} style={{...coordLbl,width:cellSize,height:coordH,marginTop:2}}>{f}</div>
+                  ))}
+                </div>
+              </div>
+              <div style={{marginTop:6,fontSize:bodyFs,color:"#6a4820",textAlign:"center",minHeight:20,padding:"0 4px",lineHeight:1.55}}>{comment}</div>
+              <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                <button onClick={()=>setStep(0)} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀◀</button>
+                <button onClick={()=>setStep(s=>Math.max(0,s-1))} disabled={step===0} style={{...navBtn,opacity:step===0?0.35:1}}>◀</button>
+                <span style={{fontSize:16,color:"#7a5838",minWidth:48,textAlign:"center"}}>{step} / {maxStep}</span>
+                <button onClick={()=>setStep(s=>Math.min(maxStep,s+1))} disabled={step>=maxStep} style={{...navBtn,opacity:step>=maxStep?0.35:1}}>▶</button>
+                <button onClick={()=>setStep(maxStep)} disabled={step>=maxStep} style={{...navBtn,opacity:step>=maxStep?0.35:1}}>▶▶</button>
+              </div>
+            </div>
+          )}
+
+          {/* Tactics list */}
           {allTactics.length > 0 && (
             <div>
               <div style={{fontSize:14,letterSpacing:"2px",color:"#a89070",textTransform:"uppercase",marginBottom:6}}>
