@@ -5230,10 +5230,12 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     const params = new URLSearchParams();
     if (lichessDiff) params.set('difficulty', lichessDiff);
 
-    // Determine API theme: if movesFilter set and no user theme → use mateIn* server-side
+    // Combine theme + movesFilter into comma-separated themes param
+    // e.g. theme='skewer' + movesFilter=2 → ?themes=skewer,mateIn2
     const MATE_THEMES = { 1: 'mateIn1', 2: 'mateIn2', 3: 'mateIn3', '4+': 'mateIn4' };
-    const apiTheme = (movesFilter !== null && !theme) ? (MATE_THEMES[movesFilter] || null) : theme;
-    if (apiTheme) params.set('themes', apiTheme);
+    const mateTheme = movesFilter !== null ? (MATE_THEMES[movesFilter] || null) : null;
+    const themeParts = [theme, mateTheme].filter(Boolean);
+    if (themeParts.length > 0) params.set('themes', themeParts.join(','));
 
     // Client-side length check function
     const movesOk = (len) => {
@@ -5364,7 +5366,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       if (puzzle) {
         tacticsRestoredRef.current = true;
         setTacticsDiff(saved.diff ?? null);
-        setTacticsTheme(saved.theme ?? null);
+        // migrate: mateIn* were moved from theme to movesFilter — clear old theme values
+        const savedTheme = saved.theme ?? null;
+        setTacticsTheme(/^mateIn/.test(savedTheme) ? null : savedTheme);
         setTacticsMovesFilter(saved.movesFilter ?? null);
         setTacticsPuzzles([puzzle]);
         setTacticsIdx(0);
@@ -5694,9 +5698,6 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
 
   const TACTICS_THEMES = [
     { id: null,               ja: 'すべて',           en: 'All' },
-    { id: 'mateIn1',          ja: '1手詰め',           en: 'Mate in 1' },
-    { id: 'mateIn2',          ja: '2手詰め',           en: 'Mate in 2' },
-    { id: 'mateIn3',          ja: '3手詰め',           en: 'Mate in 3' },
     { id: 'fork',             ja: 'フォーク・両取り',  en: 'Fork' },
     { id: 'pin',              ja: 'ピン',              en: 'Pin' },
     { id: 'sacrifice',        ja: 'サクリファイス',    en: 'Sacrifice' },
@@ -5731,28 +5732,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           })}
         </div>
 
-        {/* ── テーマ ── */}
-        <div style={{fontSize:16,fontWeight:700,color:"#7a5838",marginBottom:10,letterSpacing:1}}>
-          {playerLang==="en"?"Theme":"テーマ"}
-        </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:20}}>
-          {TACTICS_THEMES.map(t=>{
-            const active = tacticsTheme === t.id;
-            return (
-              <button key={String(t.id)} onClick={()=>setTacticsTheme(t.id)}
-                style={{border:`1.5px solid ${active?"transparent":"#c8b090"}`,borderRadius:20,padding:"5px 12px",fontSize:13,cursor:"pointer",fontFamily:serif,
-                  background:active?"#c8a86a":"transparent",color:active?"#fff":"#7a5838",fontWeight:active?700:400,whiteSpace:"nowrap",transition:"background 0.15s"}}>
-                {playerLang==="en"?t.en:t.ja}
-              </button>
-            );
-          })}
-        </div>
-
         {/* ── 手数 ── */}
         <div style={{fontSize:16,fontWeight:700,color:"#7a5838",marginBottom:10,letterSpacing:1}}>
           {playerLang==="en"?"Moves":"手数"}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginBottom:18}}>
           {[
             { val: null,  ja: "すべて", en: "All" },
             { val: 1,     ja: "1手",    en: "1 move" },
@@ -5766,6 +5750,23 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 style={{border:`1.5px solid ${active?"transparent":"#c8b090"}`,borderRadius:8,padding:"7px 2px",fontSize:12,cursor:"pointer",fontFamily:serif,
                   background:active?"#6a8abf":"transparent",color:active?"#fff":"#7a5838",fontWeight:active?700:400,transition:"background 0.15s",whiteSpace:"nowrap"}}>
                 {playerLang==="en"?en:ja}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── テーマ ── */}
+        <div style={{fontSize:16,fontWeight:700,color:"#7a5838",marginBottom:10,letterSpacing:1}}>
+          {playerLang==="en"?"Theme":"テーマ"}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:20}}>
+          {TACTICS_THEMES.map(t=>{
+            const active = tacticsTheme === t.id;
+            return (
+              <button key={String(t.id)} onClick={()=>setTacticsTheme(t.id)}
+                style={{border:`1.5px solid ${active?"transparent":"#c8b090"}`,borderRadius:20,padding:"5px 12px",fontSize:13,cursor:"pointer",fontFamily:serif,
+                  background:active?"#c8a86a":"transparent",color:active?"#fff":"#7a5838",fontWeight:active?700:400,whiteSpace:"nowrap",transition:"background 0.15s"}}>
+                {playerLang==="en"?t.en:t.ja}
               </button>
             );
           })}
@@ -5910,7 +5911,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <span style={{color:"#f08080",fontFamily:serif,fontSize:13,alignSelf:"center"}}>{playerLang==="en"?"Load failed":"読込失敗"}</span>
                 <button onClick={()=>{
                   setTacticsError(null); setTacticsLoading(true); setTacticsStatusMsg(null); setTacticsResult(null);
-                  fetchTacticsPuzzle(tacticsDiff, tacticsTheme, { onStatus: msg => setTacticsStatusMsg(msg) })
+                  fetchTacticsPuzzle(tacticsDiff, tacticsTheme, tacticsMovesFilter, { onStatus: msg => setTacticsStatusMsg(msg) })
                     .then(p=>{ setTacticsPuzzles(prev=>[...prev,p]); setTacticsIdx(prev=>prev+1); setTacticsLoading(false); setTacticsStatusMsg(null); })
                     .catch(e=>{ setTacticsLoading(false); setTacticsStatusMsg(null); setTacticsError(e.message); });
                 }} style={fsBtn}>{playerLang==="en"?"Retry":"再試行"}</button>
