@@ -955,6 +955,8 @@ function Board({ game, onUpdate, myColor, rotateTopPieces, isKids, playerLang, f
           history: [...(history||[]), {notation:nota(sr,sc,r,c,board[sr][sc]), color:turn, ts:new Date().toISOString(), from:[sr,sc], to:[r,c]}],
           redoHistory: [],
           messages: (checkMsgData && !game.chatRoomId) ? [...(game.messages||[]), checkMsgData] : (game.messages||[]),
+          lastMoveAt: Date.now(),
+          lastMover: game.players?.[turn==="w"?"white":"black"] || null,
         });
         setSel(null); setLsq([]);
       } else if (p?.color===turn) { setSel([r,c]); setLsq(legal(board,r,c,effectiveCastling,effectiveEp)); }
@@ -1005,6 +1007,8 @@ function Board({ game, onUpdate, myColor, rotateTopPieces, isKids, playerLang, f
       history: [...(history||[]), {notation:nota(fr,fc,tr,tc,promoBoard,promoteType), color:turn, ts:new Date().toISOString(), from:[fr,fc], to:[tr,tc]}],
       redoHistory: [],
       messages: (checkMsgData && !game.chatRoomId) ? [...(game.messages||[]), checkMsgData] : (game.messages||[]),
+      lastMoveAt: Date.now(),
+      lastMover: game.players?.[turn==="w"?"white":"black"] || null,
     });
     const jaLabels = { Q:"クイーン", R:"ルーク", B:"ビショップ", N:"ナイト" };
     showAnnouncement(playerLang==="en"
@@ -3096,7 +3100,8 @@ function ShogiBoard({ game, onUpdate, myColor, playerLang, pcLayout=false, flipp
     if(checkMsgData && game.chatRoomId) push(ref(db,`chat/${game.chatRoomId}`),checkMsgData).catch(()=>{});
     onUpdate({...game,board:nb,cap:nc,turn:opp,status:newStatus,
       history:[...(game.history||[]),{from:[fr,fc],to:[tr,tc],promote,ts:new Date().toISOString()}],redoHistory:[],
-      messages:(checkMsgData&&!game.chatRoomId)?[...(game.messages||[]),checkMsgData]:(game.messages||[])});
+      messages:(checkMsgData&&!game.chatRoomId)?[...(game.messages||[]),checkMsgData]:(game.messages||[]),
+      lastMoveAt:Date.now(),lastMover:game.players?.[myColor==="b"?"black":"white"]||null});
     setSel(null); setLegal([]);
     if(newStatus.startsWith("cm")) playSound("win"); else if(isCheckNow) playSound("check"); else playSound("move");
   };
@@ -3118,7 +3123,8 @@ function ShogiBoard({ game, onUpdate, myColor, playerLang, pcLayout=false, flipp
     if(checkMsgData && game.chatRoomId) push(ref(db,`chat/${game.chatRoomId}`),checkMsgData).catch(()=>{});
     onUpdate({...game,board:nb,cap:nc,turn:opp,status:newStatus,
       history:[...(game.history||[]),{drop:pType,to:[r,c],ts:new Date().toISOString()}],redoHistory:[],
-      messages:(checkMsgData&&!game.chatRoomId)?[...(game.messages||[]),checkMsgData]:(game.messages||[])});
+      messages:(checkMsgData&&!game.chatRoomId)?[...(game.messages||[]),checkMsgData]:(game.messages||[]),
+      lastMoveAt:Date.now(),lastMover:game.players?.[myColor==="b"?"black":"white"]||null});
     setSel(null); setLegal([]);
     if(newStatus.startsWith("cm")) playSound("win"); else if(isCheckNow) playSound("check"); else playSound("move");
   };
@@ -5442,9 +5448,20 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const SEEN_KEY = 'chess_tactics_seen';
   const PUZZLE_CACHE_KEY = 'chess_tactics_cache'; // last 5 puzzles for offline fallback
 
+  // Safe storage helpers: localStorage with sessionStorage fallback (for iOS private mode)
+  const seenStorageGet = useCallback(() => {
+    try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch {}
+    try { return JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]'); } catch {}
+    return [];
+  }, []);
+  const seenStorageSave = useCallback((arr) => {
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(arr)); return; } catch {}
+    try { sessionStorage.setItem(SEEN_KEY, JSON.stringify(arr)); } catch {}
+  }, []);
+
   // movesFilter: null=all | 1 | 2 | 3 | '4+'
-  // Server-side: if no theme set, use mateIn* to narrow results at API level
-  // Client-side: if theme set, fetch then filter by solution length (retry up to 12 times)
+  // Server-side: mateIn1/2/3 narrow results at API level; '4+' is client-side only
+  // Client-side: filter by solution length, retry up to 15 times
   const fetchTacticsPuzzle = useCallback(async (diff, theme, movesFilter, { onStatus } = {}) => {
     const lichessDiff = LICHESS_DIFF[diff];
     const base = 'https://lichess.org/api/puzzle/next';
@@ -5452,9 +5469,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     if (lichessDiff) params.set('difficulty', lichessDiff);
 
     // Combine theme + movesFilter into comma-separated themes param
-    // e.g. theme='skewer' + movesFilter=2 → ?themes=skewer,mateIn2
-    const MATE_THEMES = { 1: 'mateIn1', 2: 'mateIn2', 3: 'mateIn3', '4+': 'mateIn4' };
-    const mateTheme = movesFilter !== null ? (MATE_THEMES[movesFilter] || null) : null;
+    // '4+' is NOT sent as mateIn4 — it means "4+ moves" and is handled client-side only
+    const MATE_THEMES = { 1: 'mateIn1', 2: 'mateIn2', 3: 'mateIn3' };
+    const mateTheme = (movesFilter !== null && movesFilter !== '4+') ? (MATE_THEMES[movesFilter] || null) : null;
     const themeParts = [theme, mateTheme].filter(Boolean);
     if (themeParts.length > 0) params.set('themes', themeParts.join(','));
 
@@ -5469,10 +5486,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     };
 
     const url = params.toString() ? `${base}?${params}` : base;
-    const seen = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'));
+    console.log('[Tactics] API URL:', url, '| movesFilter:', movesFilter);
+    const seen = new Set(seenStorageGet());
     let rate429 = 0;
-    // More retries when client-side filtering is needed (theme + movesFilter combo)
-    const maxAttempts = (theme && movesFilter !== null) ? 15 : 8;
+    // Use more retries whenever movesFilter is active (client-side filtering needs more attempts)
+    const maxAttempts = movesFilter !== null ? 15 : 8;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let resp;
@@ -5500,11 +5518,8 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       if (!p) break;
 
       if (seen.has(p.id)) {
-        // After 5 consecutive seen hits, auto-reset the list so we never get stuck
-        if (attempt >= 4) {
-          seen.clear();
-          localStorage.removeItem(SEEN_KEY);
-        }
+        // Already seen — skip. Seen list is capped at 200 items (sliding window).
+        // Do NOT clear the list here; reset only happens via slice(-200) in saveSeen.
         await new Promise(r => setTimeout(r, 200));
         continue;
       }
@@ -5526,10 +5541,6 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       const hint = firstMove.length >= 4
         ? [8 - parseInt(firstMove[3]), firstMove.charCodeAt(2) - 97] : null;
 
-      // Record as seen (keep last 200)
-      seen.add(p.id);
-      localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
-
       // Defensive: normalize solution to array (Lichess returns array, but guard against string)
       const movesArr = Array.isArray(p.solution) ? p.solution
         : typeof p.solution === 'string' ? p.solution.trim().split(/\s+/).filter(Boolean)
@@ -5538,11 +5549,16 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
 
       // Client-side moves-count filter: skip and retry if length doesn't match
       if (!movesOk(movesArr.length)) {
-        seen.add(p.id); // mark as seen to avoid re-fetching same puzzle
-        localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
+        // Mark as seen to avoid re-fetching this same puzzle (keep last 200)
+        seen.add(p.id);
+        seenStorageSave([...seen].slice(-200));
         await new Promise(r => setTimeout(r, 150));
         continue;
       }
+
+      // Record as seen (keep last 200)
+      seen.add(p.id);
+      seenStorageSave([...seen].slice(-200));
 
       const puzzle = {
         id: `lichess_${p.id}`,
@@ -5568,7 +5584,10 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     try {
       const cache = JSON.parse(localStorage.getItem(PUZZLE_CACHE_KEY) || '[]');
       if (cache.length > 0) {
-        const fallback = cache[Math.floor(Math.random() * cache.length)];
+        // Prefer cache entries that match the current movesFilter; relax if none found
+        const matching = cache.filter(c => movesOk((c.moves||[]).length));
+        const pool = matching.length > 0 ? matching : cache;
+        const fallback = pool[Math.floor(Math.random() * pool.length)];
         return { ...fallback, fromCache: true };
       }
     } catch (e) { /* ignore */ }
@@ -5577,7 +5596,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       ? (playerLang === 'en' ? 'Rate limit reached. Please wait a moment and retry.' : 'APIのレート制限に達しました。しばらく待ってから再試行してください。')
       : (playerLang === 'en' ? 'Failed to load puzzle. Please retry.' : '新しい問題を取得できませんでした。再試行してください。');
     throw new Error(errMsg);
-  }, [playerLang]); // eslint-disable-line
+  }, [playerLang, seenStorageGet, seenStorageSave]); // eslint-disable-line
 
   // Restore chess tactics session from localStorage on mount
   useEffect(() => {
@@ -8521,12 +8540,13 @@ export default function App() {
     }, 800);
   }, []);
 
-  // ゲームタブ通知・最終閲覧履歴数（Firebase同期 + localStorageキャッシュ）
+  // ゲームタブ通知・最終閲覧タイムスタンプ（Firebase同期 + localStorageキャッシュ）
+  // V2: タイムスタンプ方式（旧V1は手数方式 — 値が小さいため自動的に無効扱い）
   const [gameTabSeen, setGameTabSeen] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("gameTabSeen") || "{}"); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem("gameTabSeenV2") || "{}"); } catch { return {}; }
   });
   const [shogiTabSeen, setShogiTabSeen] = useState(()=>{
-    try { return JSON.parse(localStorage.getItem("shogiTabSeen")||"{}"); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem("shogiTabSeenV2")||"{}"); } catch { return {}; }
   });
   const hasRestoredTab = useRef(false);
   const [playerName, setPlayerName] = useState(() => { try { return localStorage.getItem("playerName") || null; } catch { return null; } });
@@ -8780,10 +8800,10 @@ export default function App() {
     })().catch(e => console.warn("[migration] chess", e));
   }, [games]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Firebase gameTabSeen をリアルタイム購読（複数端末同期）
+  // Firebase gameTabSeenV2 をリアルタイム購読（複数端末同期・タイムスタンプ方式）
   useEffect(() => {
     if (!playerName) return;
-    const seenRef = ref(db, `gameTabSeen/${playerName}`);
+    const seenRef = ref(db, `gameTabSeenV2/${playerName}`);
     const unsub = onValue(seenRef, snap => {
       const data = snap.val();
       if (!data || typeof data !== "object") return;
@@ -8794,17 +8814,17 @@ export default function App() {
           if ((merged[k] || 0) < v) { merged[k] = v; changed = true; }
         });
         if (!changed) return prev;
-        try { localStorage.setItem("gameTabSeen", JSON.stringify(merged)); } catch {}
+        try { localStorage.setItem("gameTabSeenV2", JSON.stringify(merged)); } catch {}
         return merged;
       });
     });
     return () => unsub();
   }, [playerName]);
 
-  // Firebase shogiTabSeen をリアルタイム購読（複数端末同期）
+  // Firebase shogiTabSeenV2 をリアルタイム購読（複数端末同期・タイムスタンプ方式）
   useEffect(() => {
     if (!playerName) return;
-    const shogiSeenRef = ref(db, `shogiTabSeen/${playerName}`);
+    const shogiSeenRef = ref(db, `shogiTabSeenV2/${playerName}`);
     const unsub2 = onValue(shogiSeenRef, snap => {
       const data = snap.val();
       if (!data || typeof data !== "object") return;
@@ -8815,39 +8835,42 @@ export default function App() {
           if ((merged[k] || 0) < v) { merged[k] = v; changed = true; }
         });
         if (!changed) return prev;
-        try { localStorage.setItem("shogiTabSeen", JSON.stringify(merged)); } catch {}
+        try { localStorage.setItem("shogiTabSeenV2", JSON.stringify(merged)); } catch {}
         return merged;
       });
     });
     return () => unsub2();
   }, [playerName]);
 
-  // チェスタブを閲覧中は常に既読扱い（チェス画面のときのみ）
+  // チェスタブを閲覧中は常に既読扱い（タイムスタンプ方式・チェス画面のみ）
   useEffect(() => {
     if (currentView !== "chess") return;
     if (!games || games[tab] === undefined) return;
     const g = games[tab];
-    const histLen = (g.history || []).length;
+    const lastMoveAt = g.lastMoveAt || 0;
     setGameTabSeen(prev => {
-      if ((prev[g.id] || 0) >= histLen) return prev;
-      const next = { ...prev, [g.id]: histLen };
-      try { localStorage.setItem("gameTabSeen", JSON.stringify(next)); } catch {}
-      if (playerName) set(ref(db, `gameTabSeen/${playerName}`), next);
+      // 最新の指し手より後に既読済みなら更新不要
+      if ((prev[g.id] || 0) >= lastMoveAt) return prev;
+      const ts = Date.now();
+      const next = { ...prev, [g.id]: ts };
+      try { localStorage.setItem("gameTabSeenV2", JSON.stringify(next)); } catch {}
+      if (playerName) set(ref(db, `gameTabSeenV2/${playerName}`), next);
       return next;
     });
   }, [games, tab, playerName, currentView]);
 
-  // 将棋タブを閲覧中は常に既読扱い（将棋画面のときのみ）
+  // 将棋タブを閲覧中は常に既読扱い（タイムスタンプ方式・将棋画面のみ）
   useEffect(() => {
     if (currentView !== "shogi") return;
     if (!shogiGames || shogiGames[shogiTab] === undefined) return;
     const g = shogiGames[shogiTab];
-    const histLen = (g.history || []).length;
+    const lastMoveAt = g.lastMoveAt || 0;
     setShogiTabSeen(prev => {
-      if ((prev[g.id] || 0) >= histLen) return prev;
-      const next = { ...prev, [g.id]: histLen };
-      try { localStorage.setItem("shogiTabSeen", JSON.stringify(next)); } catch {}
-      if (playerName) set(ref(db, `shogiTabSeen/${playerName}`), next);
+      if ((prev[g.id] || 0) >= lastMoveAt) return prev;
+      const ts = Date.now();
+      const next = { ...prev, [g.id]: ts };
+      try { localStorage.setItem("shogiTabSeenV2", JSON.stringify(next)); } catch {}
+      if (playerName) set(ref(db, `shogiTabSeenV2/${playerName}`), next);
       return next;
     });
   }, [shogiGames, shogiTab, playerName, currentView]);
@@ -9231,11 +9254,10 @@ export default function App() {
   const renderGameTabs = () => games.map((g, i) => {
           const isActive = tab === i;
           const isPlayerInGame = playerName && (g.players?.white===playerName || g.players?.black===playerName);
-          const histLen = (g.history||[]).length;
-          const rawLastSeen = gameTabSeen[g.id] || 0;
-          const lastSeen = histLen < rawLastSeen ? 0 : rawLastSeen;
-          const myChessColor = g.players?.white === playerName ? 'w' : 'b';
-          const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing" && histLen > lastSeen && g.turn === myChessColor;
+          const lastMoveAt = g.lastMoveAt || 0;
+          const lastSeen = gameTabSeen[g.id] || 0;
+          const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing"
+            && lastMoveAt > lastSeen && (g.lastMover || null) !== playerName;
           const hasMsgUpdate = isPlayerInGame && !!gameMsgUnread[g.id];
           const wMember = members.find(m => m.name === g.players?.white);
           const bMember = members.find(m => m.name === g.players?.black);
@@ -9243,11 +9265,11 @@ export default function App() {
             <button key={g.id} onClick={() => {
               setTab(i);
               markGameMsgRead(g.id);
-              const hl = (g.history||[]).length;
               setGameTabSeen(prev => {
-                const next = {...prev, [g.id]: hl};
-                try { localStorage.setItem("gameTabSeen", JSON.stringify(next)); } catch {}
-                if (playerName) set(ref(db, `gameTabSeen/${playerName}`), next);
+                const ts = Date.now();
+                const next = {...prev, [g.id]: ts};
+                try { localStorage.setItem("gameTabSeenV2", JSON.stringify(next)); } catch {}
+                if (playerName) set(ref(db, `gameTabSeenV2/${playerName}`), next);
                 return next;
               });
               try { localStorage.setItem("lastGameTabId", g.id); } catch {}
@@ -9319,11 +9341,10 @@ export default function App() {
   const renderShogiTabs = () => shogiGames.map((g, i) => {
     const isActive = shogiTab === i;
     const isPlayerInShogiGame = playerName && (g.players?.white===playerName || g.players?.black===playerName);
-    const shogiHistLen = (g.history||[]).length;
-    const rawShogiLastSeen2 = shogiTabSeen[g.id] || 0;
-    const shogiLastSeen = shogiHistLen < rawShogiLastSeen2 ? 0 : rawShogiLastSeen2;
-    const myShogiColor = g.players?.black === playerName ? 'b' : 'w';
-    const hasShogiGameUpdate = !isActive && isPlayerInShogiGame && g.status==="playing" && shogiHistLen > shogiLastSeen && g.turn === myShogiColor;
+    const shogiLastMoveAt = g.lastMoveAt || 0;
+    const shogiLastSeen = shogiTabSeen[g.id] || 0;
+    const hasShogiGameUpdate = !isActive && isPlayerInShogiGame && g.status==="playing"
+      && shogiLastMoveAt > shogiLastSeen && (g.lastMover || null) !== playerName;
     const hasShogiMsgUpdate = isPlayerInShogiGame && !!gameMsgUnread[g.id];
     const wMember = members.find(m => m.name === g.players?.white);
     const bMember = members.find(m => m.name === g.players?.black);
@@ -9331,11 +9352,11 @@ export default function App() {
       <button key={g.id} onClick={() => {
         setShogiTab(i);
         markGameMsgRead(g.id);
-        const hl = (g.history||[]).length;
         setShogiTabSeen(prev => {
-          const next = {...prev, [g.id]: hl};
-          try { localStorage.setItem("shogiTabSeen", JSON.stringify(next)); } catch {}
-          if (playerName) set(ref(db, `shogiTabSeen/${playerName}`), next);
+          const ts = Date.now();
+          const next = {...prev, [g.id]: ts};
+          try { localStorage.setItem("shogiTabSeenV2", JSON.stringify(next)); } catch {}
+          if (playerName) set(ref(db, `shogiTabSeenV2/${playerName}`), next);
           return next;
         });
         if (g.status !== "playing") setShogiStartModal({ gameIndex: i, step:1, opponent:null });
@@ -9499,22 +9520,21 @@ export default function App() {
                 {currentView==="chess" ? games.map((g, i) => {
                   const isActive = tab === i;
                   const isPlayerInGame = playerName && (g.players?.white===playerName || g.players?.black===playerName);
-                  const histLen = (g.history||[]).length;
-                  const rawLastSeen = gameTabSeen[g.id] || 0;
-                  const lastSeen = histLen < rawLastSeen ? 0 : rawLastSeen;
-                  const myChessColor2 = g.players?.white === playerName ? 'w' : 'b';
-                  const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing" && histLen > lastSeen && g.turn === myChessColor2;
+                  const lastMoveAt2 = g.lastMoveAt || 0;
+                  const lastSeen2 = gameTabSeen[g.id] || 0;
+                  const hasGameUpdate = !isActive && isPlayerInGame && g.status==="playing"
+                    && lastMoveAt2 > lastSeen2 && (g.lastMover || null) !== playerName;
                   const wMember = members.find(m => m.name === g.players?.white);
                   const bMember = members.find(m => m.name === g.players?.black);
                   return (
                     <button key={g.id} onClick={() => {
                       setTab(i);
                       setShowPractice(false);
-                      const hl = (g.history||[]).length;
                       setGameTabSeen(prev => {
-                        const next = {...prev, [g.id]: hl};
-                        try { localStorage.setItem("gameTabSeen", JSON.stringify(next)); } catch {}
-                        if (playerName) set(ref(db, `gameTabSeen/${playerName}`), next);
+                        const ts = Date.now();
+                        const next = {...prev, [g.id]: ts};
+                        try { localStorage.setItem("gameTabSeenV2", JSON.stringify(next)); } catch {}
+                        if (playerName) set(ref(db, `gameTabSeenV2/${playerName}`), next);
                         return next;
                       });
                       try { localStorage.setItem("lastGameTabId", g.id); } catch {}
@@ -9560,22 +9580,21 @@ export default function App() {
                 }) : shogiGames.map((g, i) => {
                   const isActive = shogiTab === i;
                   const isPlayerInShogi = playerName && (g.players?.white===playerName || g.players?.black===playerName);
-                  const shogiHistLen = (g.history||[]).length;
-                  const rawShogiLastSeen = shogiTabSeen[g.id] || 0;
-                  const shogiLastSeen = shogiHistLen < rawShogiLastSeen ? 0 : rawShogiLastSeen;
-                  const myShogiColor2 = g.players?.black === playerName ? 'b' : 'w';
-                  const hasShogiUpdate = !isActive && isPlayerInShogi && g.status==="playing" && shogiHistLen > shogiLastSeen && g.turn === myShogiColor2;
+                  const shogiLastMoveAt2 = g.lastMoveAt || 0;
+                  const shogiLastSeen2 = shogiTabSeen[g.id] || 0;
+                  const hasShogiUpdate = !isActive && isPlayerInShogi && g.status==="playing"
+                    && shogiLastMoveAt2 > shogiLastSeen2 && (g.lastMover || null) !== playerName;
                   const wMember = members.find(m => m.name === g.players?.white);
                   const bMember = members.find(m => m.name === g.players?.black);
                   return (
                     <button key={g.id} onClick={() => {
                       setShogiTab(i);
                       setShowPractice(false);
-                      const hl = (g.history||[]).length;
                       setShogiTabSeen(prev => {
-                        const next = {...prev, [g.id]: hl};
-                        try { localStorage.setItem("shogiTabSeen", JSON.stringify(next)); } catch {}
-                        if (playerName) set(ref(db, `shogiTabSeen/${playerName}`), next);
+                        const ts = Date.now();
+                        const next = {...prev, [g.id]: ts};
+                        try { localStorage.setItem("shogiTabSeenV2", JSON.stringify(next)); } catch {}
+                        if (playerName) set(ref(db, `shogiTabSeenV2/${playerName}`), next);
                         return next;
                       });
                       if (g.status !== "playing") setShogiStartModal({gameIndex: i, step:1, opponent:null});
