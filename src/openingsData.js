@@ -8,6 +8,9 @@ export const CHESS_OPENINGS = [
     moves: ["e2e4","e7e5","g1f3","b8c6","f1b5"],
     descJa: "ビショップをb5に展開し相手ナイトを牽制。最も古典的なオープニングの一つ。",
     descEn: "White develops the bishop to b5, pressuring Black's knight. One of the oldest classical openings.",
+    category: "オープンゲーム", categoryEn: "Open Game (1.e4)",
+    pointsJa:["✓ ビショップb5で黒ナイトを牽制しe5ポーンの支えを間接的に脅かす","✓ d4突きで中央ポーン優位（e4+d4）を目指す","✓ キャスリング後ルークをe1に置いてe5への圧力を継続","✓ 「ベルリン・ウォール」など黒の応手により変化が大きく分岐する"],
+    pointsEn:["✓ Bb5 pressures the knight, indirectly threatening the e5 pawn support","✓ Aim for central pawn dominance (e4+d4) with an eventual d4","✓ After castling, place the rook on e1 to maintain pressure on e5","✓ Black's responses (e.g. Berlin Wall) create major branching variations"],
   },
   {
     id: "italian",
@@ -16,6 +19,9 @@ export const CHESS_OPENINGS = [
     moves: ["e2e4","e7e5","g1f3","b8c6","f1c4","f8c5"],
     descJa: "ビショップをc4に向け中央支配を目指す。ジョコ・ピアノとも呼ばれる王道オープニング。",
     descEn: "White places the bishop on c4 aiming for central control. Also known as Giuoco Piano.",
+    category: "オープンゲーム", categoryEn: "Open Game (1.e4)",
+    pointsJa:["✓ ビショップc4でf7の弱点を狙う古典的な展開優先のオープニング","✓ 中央支配と早いキャスリングが最優先事項","✓ 原則（中央・展開・キャスリング）が機能する教科書的な戦法","✓ 黒のc5応手（ジョコ・ピアノ）では駒の活性化争いが鍵になる"],
+    pointsEn:["✓ Bc4 targets the f7 weakness in a classic development-first opening","✓ Central control and quick castling are the top priorities","✓ Basic principles (center, develop, castle) are fully rewarded here","✓ Against c5 (Giuoco Piano), the fight for piece activity becomes critical"],
   },
   {
     id: "sicilian",
@@ -24,6 +30,9 @@ export const CHESS_OPENINGS = [
     moves: ["e2e4","c7c5","g1f3","d7d6","d2d4","c5d4","f3d4","g8f6","b1c3","a7a6"],
     descJa: "黒がc5で非対称に応じる最人気の対1.e4応手。ナイドーフ変化を示す。",
     descEn: "Black's most popular response to 1.e4 with asymmetric c5. Shows the Najdorf variation.",
+    category: "セミオープンゲーム", categoryEn: "Semi-Open Game",
+    pointsJa:["✓ 非対称な駒組みで黒が積極的な反撃を目指す最人気の対1.e4応手","✓ ナイドーフ変化ではa6で展開の柔軟性を確保する","✓ 白はキングサイド攻撃、黒はクイーンサイドのポーン多数で戦う","✓ 豊富な変化があり奥深いが学習コストも高い戦略的なオープニング"],
+    pointsEn:["✓ Black's most popular 1.e4 answer — asymmetric and counterattacking","✓ In the Najdorf, a6 preserves maximum flexibility for Black's pieces","✓ White attacks on the kingside; Black has a pawn majority on the queenside","✓ Rich in theory and strategically deep — high learning investment"],
   },
   {
     id: "queens_gambit",
@@ -32,6 +41,9 @@ export const CHESS_OPENINGS = [
     moves: ["d2d4","d7d5","c2c4","e7e6","b1c3","g8f6","c1g5"],
     descJa: "c4でポーンを差し出し中央支配を狙う。クローズドゲームの代表的オープニング。",
     descEn: "White offers a pawn on c4 to gain central control. A classic closed-game opening.",
+    category: "クローズドゲーム", categoryEn: "Closed Game (1.d4)",
+    pointsJa:["✓ c4でポーンを提供し中央のスペース・活性化を得ることが目的","✓ 黒がdxc4で受け入れると白はe4突きでビショップを活性化できる","✓ 黒がe6で断ると（QGD）堅固だが駒が窮屈になりやすい","✓ 大駒の活性化とルークのオープンファイル配置が勝利の鍵"],
+    pointsEn:["✓ White offers the c4 pawn to gain space and piece activity in the center","✓ If Black takes (QGA), White plays e4 to activate the bishop","✓ If Black declines with e6 (QGD), the structure is solid but cramped","✓ Activating major pieces and controlling open files are the winning keys"],
   },
   {
     id: "kings_indian",
@@ -40,6 +52,9 @@ export const CHESS_OPENINGS = [
     moves: ["d2d4","g8f6","c2c4","g7g6","b1c3","f8g7","e2e4","d7d6","g1f3"],
     descJa: "ビショップをg7にフィアンケット展開し積極的な反撃を目指す現代的ディフェンス。",
     descEn: "Black fianchettoes the bishop to g7 and prepares dynamic counterplay. A modern aggressive defense.",
+    category: "インディアンディフェンス", categoryEn: "Indian Defense",
+    pointsJa:["✓ ビショップをg7にフィアンケットし中央のポーン陣に対抗する","✓ 白が中央でポーン優位を持つ代わり、黒は側面からの激しい反撃を狙う","✓ キャスリング後にキングサイドでf5突き・駒圧力をかける攻撃形","✓ 駒のカウンターアタック感覚が重要な現代的でダイナミックなディフェンス"],
+    pointsEn:["✓ Fianchetto the bishop to g7, countering White's pawn center","✓ White holds central pawn space while Black prepares dynamic counterplay","✓ After castling, Black launches a kingside attack with f5 and piece pressure","✓ A modern and dynamic defense requiring strong counterattacking instincts"],
   },
   {
     id: "french",
@@ -48,6 +63,9 @@ export const CHESS_OPENINGS = [
     moves: ["e2e4","e7e6","d2d4","d7d5","b1c3","g8f6","c1g5"],
     descJa: "e6で堅固な駒組みを作り白のd4ポーンに圧力をかける戦略的ディフェンス。",
     descEn: "Black builds a solid structure with e6, attacking White's d4 pawn. Strategic and solid.",
+    category: "セミオープンゲーム", categoryEn: "Semi-Open Game",
+    pointsJa:["✓ e6でポーン構造を作り白のe4+d4に対して戦略的に圧力をかける","✓ 黒のc8ビショップが「フランスのビショップ」として構造的弱点になりやすい","✓ 白はキングサイド攻撃、黒はクイーンサイドのポーン多数で戦う","✓ 固い構造を好む守備的プレイヤーに適した戦略的ディフェンス"],
+    pointsEn:["✓ Black builds with e6 and strategically pressures White's e4+d4 center","✓ Black's c8 bishop (the 'French bishop') tends to be structurally weak","✓ White attacks the kingside while Black uses a queenside pawn majority","✓ A strategic defense suited to players who prefer a solid, closed structure"],
   },
   {
     id: "caro_kann",
@@ -56,6 +74,9 @@ export const CHESS_OPENINGS = [
     moves: ["e2e4","c7c6","d2d4","d7d5","b1c3","d5e4","c3e4","c8f5"],
     descJa: "c6でポーンを支えd5を突く堅実なディフェンス。フランス系より駒の活動性が高い。",
     descEn: "Black supports d5 with c6 — solid and active. Bishops stay freer than in the French.",
+    category: "セミオープンゲーム", categoryEn: "Semi-Open Game",
+    pointsJa:["✓ c6でd5を支える堅実で均衡の取れた対1.e4応手","✓ フランスとは違いビショップが自由に活動できるのが大きな利点","✓ 構造が堅固でリスクが低く、長期戦に強い実践的な戦法","✓ 黒はポーン交換後に活発な駒配置と良好な駒の均衡を目指す"],
+    pointsEn:["✓ Supports d5 with c6 — a solid and balanced response to 1.e4","✓ Unlike the French, Black's bishops remain free and active","✓ A solid, low-risk structure suited for long positional games","✓ After the pawn exchange, Black aims for active piece coordination and equality"],
   },
   {
     id: "london",
@@ -64,6 +85,9 @@ export const CHESS_OPENINGS = [
     moves: ["d2d4","d7d5","g1f3","g8f6","c1f4","e7e6","e2e3","c7c5"],
     descJa: "白がビショップをf4・ナイトをf3に固定する安定したシステム。幅広い局面に対応しやすい。",
     descEn: "White sets up Bf4 and Nf3 as a solid system. Reliable and flexible against most setups.",
+    category: "クローズドゲーム", categoryEn: "Closed Game (1.d4)",
+    pointsJa:["✓ ビショップf4・ナイトf3・ポーンe3の安定したシステムを構築","✓ どんな黒の応手にも同じ構造で対応できる汎用性の高さが魅力","✓ キャスリング後にe4突きで積極的に展開できる準備を整える","✓ 序盤の研究量が少なくて済む入門〜中級者に人気の実践的戦法"],
+    pointsEn:["✓ Build a stable system: Bf4 + Nf3 + e3 in a reliable formation","✓ Works against almost any Black setup — extremely versatile","✓ After castling, prepare to push e4 for active piece play","✓ Requires minimal opening theory — popular with beginners and intermediates"],
   },
   {
     id: "english",
@@ -72,6 +96,9 @@ export const CHESS_OPENINGS = [
     moves: ["c2c4","e7e5","b1c3","g8f6","g2g3","d7d5","c4d5","f6d5"],
     descJa: "c4から始まるフランキングオープニング。柔軟な展開で多彩な変化に対応できる現代的戦法。",
     descEn: "A flank opening starting with c4. Highly flexible and transposes into many modern systems.",
+    category: "フランキング", categoryEn: "Flank Opening",
+    pointsJa:["✓ c4から始まるフランキングオープニング、中央をポーンで支配しない","✓ 多くのオープニングへの転換（トランスポジション）が可能な柔軟性","✓ 大駒の活性化と柔軟な駒組みが特徴の現代的な戦法","✓ 時機を見てd4・e4で中央にポーンを進める選択肢も持つ"],
+    pointsEn:["✓ A flank opening with c4 — doesn't immediately occupy the center with pawns","✓ Extremely flexible; transposes into many different pawn structures","✓ Emphasizes piece activity and adaptable development","✓ Keeps the option of d4 or e4 to claim central space at the right moment"],
   },
   {
     id: "nimzo_indian",
@@ -80,6 +107,9 @@ export const CHESS_OPENINGS = [
     moves: ["d2d4","g8f6","c2c4","e7e6","b1c3","f8b4"],
     descJa: "黒がビショップをb4に配置し白のe4前進を牽制。ダブルポーンを誘発する高度な戦略的ディフェンス。",
     descEn: "Black pins the knight on c3 with Bb4. Doubles White's pawns and creates strategic imbalances.",
+    category: "インディアンディフェンス", categoryEn: "Indian Defense",
+    pointsJa:["✓ ビショップb4でナイトをピンし白のe4前進を牽制する高度な戦略","✓ 白がa3と問えばbxc3でダブルポーンを誘発する","✓ 駒の損失と引き換えに活性化・ポーン構造での優位を狙う","✓ 世界トップ棋士が愛用する理論的で奥深いディフェンス"],
+    pointsEn:["✓ Pins the knight on c3 with Bb4, preventing White's e4 advance","✓ If White plays a3, Black can play Bxc3 to double White's c-pawns","✓ Trading the bishop for dynamic compensation in piece activity and structure","✓ A deeply theoretical defense beloved by top-level players worldwide"],
   },
 ];
 
@@ -91,6 +121,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","6g6f","3c3d","7i6h","3a4b","6i7h","4a3b"],
     descJa: "居飛車の代表的な囲い。金銀を組み合わせ玉を固める最も基本的で堅固な囲いの一つ。",
     descEn: "A classic castle for static rook players. Combines golds and silvers to secure the king.",
+    category: "居飛車", categoryEn: "Static Rook",
+    pointsJa:["✓ 金銀を組み合わせた最もバランスの良い基本囲いの一つ","✓ 玉の守りを固めてから飛車・角の攻撃準備を整える","✓ 角換わり・相矢倉など多くの戦型で活用される定跡の基本","✓ 完成した矢倉は正面からの攻撃に強い堅固な陣形"],
+    pointsEn:["✓ One of the most balanced and fundamental castles using golds and silvers","✓ Secure the king first, then prepare the attack with rook and bishop","✓ A foundational castle used in many joseki — bishop exchange, mirror yagura, etc.","✓ The completed Yagura castle is strong against direct frontal attacks"],
   },
   {
     id: "shiken_bisha",
@@ -99,6 +132,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","2h4h","8d8e","4g4f","3c3d","6i7h"],
     descJa: "飛車を4筋に移動させる振り飛車の代表戦法。攻守バランスに優れた人気の作戦。",
     descEn: "Rook moves to the 4th file. A popular flying-rook strategy with balanced attack and defense.",
+    category: "振り飛車", categoryEn: "Flying Rook",
+    pointsJa:["✓ 飛車を4筋に移動し攻守バランスの良い陣形を作る","✓ 美濃囲いと組み合わせると堅い守りと鋭い攻めが両立する","✓ 居飛車穴熊への対抗策として対穴熊戦法が発展している","✓ 振り飛車入門として最も人気が高く定跡研究も豊富"],
+    pointsEn:["✓ Move the rook to the 4th file for a well-balanced attack/defense posture","✓ Combined with the Mino castle, creates both solid defense and sharp attacks","✓ Various counter-strategies against the underground bear (anaguma) have been developed","✓ The most popular entry point for flying rook players, with rich joseki to study"],
   },
   {
     id: "kakugawari",
@@ -107,6 +143,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","3c3d","8h2b+","3a2b"],
     descJa: "序盤に角を交換する積極的戦法。角を手持ちにして後の打ち込みを狙う。",
     descEn: "Both sides exchange bishops early. Holding a bishop in hand allows powerful drop attacks later.",
+    category: "居飛車", categoryEn: "Static Rook",
+    pointsJa:["✓ 序盤で双方の角を交換し持ち駒として活用する積極的戦法","✓ 角を手持ちにすると局面のどこへでも打ち込める強力な武器になる","✓ 角の打ち込みポイントを常に意識した局面判断が重要","✓ 棒銀・早繰り銀など多様な攻め筋と組み合わせやすい"],
+    pointsEn:["✓ Both sides exchange bishops early — a proactive strategy","✓ Holding a bishop in hand creates a powerful drop weapon anywhere on the board","✓ Always be aware of the best square to drop the bishop","✓ Easily combined with attacking patterns like bogin and hayaguri gin"],
   },
   {
     id: "sangen_bisha",
@@ -115,6 +154,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","2h3h","8d8e","3g3f","3c3d"],
     descJa: "飛車を3筋に移動させる振り飛車。四間飛車より守りに厚く9筋攻めと組み合わせやすい。",
     descEn: "Rook moves to the 3rd file. More solid than 4th-file rook, good for 9th-file attacks.",
+    category: "振り飛車", categoryEn: "Flying Rook",
+    pointsJa:["✓ 飛車を3筋に置き厚みのある陣形を築く振り飛車","✓ 9筋の端攻めと連携しやすい位置関係が特徴","✓ 穴熊対策として石田流に発展させやすい","✓ 守りに厚く長期戦向きの落ち着いた実戦的戦法"],
+    pointsEn:["✓ Rook on the 3rd file — builds a solid and thick formation","✓ Pairs naturally with edge attacks on the 9th file","✓ Easily develops into the Ishida formation as a counter to the underground bear","✓ Solid and patient — well-suited for long strategic battles"],
   },
   {
     id: "mukai_bisha",
@@ -123,6 +165,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","8h7g","2h8h","8d8e","3c3d"],
     descJa: "飛車を8筋に移動させ相手飛車と向かい合わせにする振り飛車。直接対決を狙う積極的戦法。",
     descEn: "Rook moves to face opponent's rook on the 8th file. A direct and aggressive flying-rook strategy.",
+    category: "振り飛車", categoryEn: "Flying Rook",
+    pointsJa:["✓ 飛車を8筋に移動し相手飛車と向かい合わせにする直接対決型","✓ 飛車交換を積極的に狙い、持ち駒として活用する戦法","✓ 角の使い方と持ち駒の打ち込みポイントが勝敗を左右する","✓ 早期の飛車交換から相手陣への打ち込みを狙う攻撃的スタイル"],
+    pointsEn:["✓ Rook faces the opponent's rook on the 8th file — a direct confrontation","✓ Actively seeks rook exchange to use the rook as a hand piece","✓ How you use the bishop and drop the rook in hand determines the outcome","✓ An aggressive style that looks for early rook exchanges and drops into the opponent's camp"],
   },
   {
     id: "naka_bisha",
@@ -131,6 +176,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","5g5f","8d8e","2h5h"],
     descJa: "飛車を5筋（中央）に配置する振り飛車。中央支配と攻撃の両立が得意な均衡型戦法。",
     descEn: "Rook moves to the central 5th file. Controls the center while building balanced attack potential.",
+    category: "振り飛車", categoryEn: "Flying Rook",
+    pointsJa:["✓ 飛車を5筋（中央）に配置し中央支配を図る振り飛車","✓ 居飛車・振り飛車どちらの展開にも対応しやすい均衡型","✓ 中央から左右両方へ攻撃できる柔軟性が最大の強み","✓ ゴキゲン中飛車など積極的変化も豊富で人気が高い"],
+    pointsEn:["✓ Rook on the central 5th file — controls the center from the start","✓ Flexible enough to respond to both static and flying rook setups","✓ The ability to attack both flanks from the center is its greatest strength","✓ The 'Gokigen' variation and other aggressive lines make it highly popular"],
   },
   {
     id: "gangi",
@@ -139,6 +187,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","6g6f","3c3d","6i7h","4a3b","3i4h","8b3b"],
     descJa: "桂馬を活用した居飛車の囲い。矢倉に似るが桂馬が跳ねやすく積極的な攻撃に向く。",
     descEn: "A static-rook formation emphasizing the knight. Similar to Yagura but with more active knight play.",
+    category: "居飛車", categoryEn: "Static Rook",
+    pointsJa:["✓ 桂馬を活用した居飛車の囲いで矢倉に似た陣形","✓ 桂馬が跳ねやすく相手の守りへ積極的に圧力をかける","✓ 相手が矢倉の場合、桂馬で端・4筋を攻める形が有力","✓ 近年プロ間での人気が高まっている現代的な居飛車戦法"],
+    pointsEn:["✓ A static-rook castle that emphasizes knight activity, similar to Yagura","✓ The knight can leap forward easily, applying pressure on the opponent's defense","✓ Against Yagura, targeting the edge or 4th file with the knight is powerful","✓ A modern static-rook strategy that has grown popular in professional shogi"],
   },
   {
     id: "ishida",
@@ -147,6 +198,9 @@ export const SHOGI_OPENINGS = [
     moves: ["7g7f","8c8d","7f7e","3c3d","7i7h","2b3c","8h7g"],
     descJa: "7五歩から飛車・角・桂を連携させる三間飛車の発展形。攻撃的かつスピーディーな戦法。",
     descEn: "An aggressive three-file rook setup with pawn on 7e. Coordinates rook, bishop, and knight for rapid attack.",
+    category: "振り飛車", categoryEn: "Flying Rook",
+    pointsJa:["✓ 7五歩で飛車・角・桂の連携を最大化する積極的な振り飛車","✓ 飛車先のポーンを三段目まで進める攻撃的な陣形が特徴","✓ 早石田・山田定跡など多彩な変化を持つ奥深い戦法","✓ スピーディーな攻めと堅い守りを両立したバランス型振り飛車"],
+    pointsEn:["✓ Push 7e to maximize coordination between rook, bishop, and knight","✓ The rook pawn advancing to the third rank is the signature aggressive feature","✓ Rich in variations — Hayaishida, Yamada joseki, and more","✓ A balanced flying-rook strategy combining speedy attacks with solid defense"],
   },
 ];
 
@@ -159,6 +213,8 @@ export const CHESS_TACTICS = [
     fen:"r1bqkb1r/pppp1ppp/2n2n2/4p3/3NP3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 1",
     moves:["d4c6"],
     moveComments:{ja:["初期配置：ナイトd4、黒クイーンd8・ルークa8が視野に","ナイトがd4からc6へ！クイーンとルークを同時に攻撃するフォーク"],en:["Starting position: knight on d4, Black queen d8 and rook a8 in sight","Knight to c6! Forking the queen and rook simultaneously"]},
+    pointsJa:["✓ 1つの駒で相手の2つ以上の駒を同時に攻撃する","✓ ナイトは独特な動きでフォークしやすい代表的な駒","✓ キングとクイーンを同時に攻撃する「ロイヤルフォーク」が最強","✓ 相手が1つしか守れないため、もう1つを必ず取れる"],
+    pointsEn:["✓ Attack two or more opponent pieces simultaneously with one piece","✓ The knight is the classic forking piece thanks to its unique movement","✓ The 'royal fork' attacking king and queen simultaneously is the strongest","✓ The opponent can only save one piece — the other is yours"],
   },
   {
     id:"pin", nameJa:"ピン", nameEn:"Pin", direct:true,
@@ -167,6 +223,8 @@ export const CHESS_TACTICS = [
     fen:"r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1",
     moves:["c4f7"],
     moveComments:{ja:["初期配置：白ビショップc4、黒キングe8の前にポーンがある","ビショップがf7へ！キングの前のポーンをピンして動けなくする"],en:["Starting position: white bishop c4, Black king e8 with pawn in front","Bishop to f7! Pinning the pawn in front of the king"]},
+    pointsJa:["✓ 駒を動かすと背後の価値の高い駒（キング等）が取られる状態","✓ キングが背後にある「絶対ピン」ではその駒は動かせない","✓ ルーク・ビショップ・クイーンで長距離ピンが可能","✓ ピンされた駒をさらに攻撃すると相手は対応できなくなる"],
+    pointsEn:["✓ A piece cannot move without exposing a more valuable piece behind it","✓ An 'absolute pin' against the king means the piece literally cannot move","✓ Long-range pieces (rook, bishop, queen) are used to create pins","✓ Attack a pinned piece again — the opponent cannot respond to both threats"],
   },
   {
     id:"skewer", nameJa:"スキュア", nameEn:"Skewer", direct:true,
@@ -175,6 +233,8 @@ export const CHESS_TACTICS = [
     fen:"4k3/8/8/8/8/8/4R3/4K3 w - - 0 1",
     moves:["e2e8"],
     moveComments:{ja:["初期配置：白ルークe2、黒キングe8が同列に","ルークがe8へ！キングを攻撃し、キングが逃げると後ろの駒が取れる"],en:["Starting position: white rook e2, Black king e8 on same file","Rook to e8! Attack the king, take what's behind after it moves"]},
+    pointsJa:["✓ ピンの逆：価値の高い駒（キング等）を直接攻撃する","✓ 攻撃された駒が逃げると、背後の駒を無防備のまま取れる","✓ キングを狙うと相手は必ず逃げなければならない","✓ ルーク・ビショップ・クイーンの長距離攻撃で決まる"],
+    pointsEn:["✓ The reverse of a pin: directly attack the high-value piece (e.g. king)","✓ Once the attacked piece moves away, the piece behind it is captured for free","✓ Targeting the king forces the opponent to always flee","✓ Executed with long-range pieces: rook, bishop, or queen"],
   },
   {
     id:"back_rank", nameJa:"バックランク", nameEn:"Back Rank Mate", direct:true,
@@ -183,6 +243,8 @@ export const CHESS_TACTICS = [
     fen:"6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
     moves:["a1a8"],
     moveComments:{ja:["初期配置：黒キングg8、バックランクはポーンで守られている","ルークがa8へ！バックランクに侵入してチェックメイト"],en:["Starting position: Black king on g8, back rank covered by pawns","Rook to a8! Invade the back rank for checkmate"]},
+    pointsJa:["✓ キャスリング後にポーンが動いていないと最終ランクが弱点になる","✓ ルーク・クイーンで相手のバックランクに侵入してチェックメイト","✓ バックランクメイトを防ぐには「逃げ道」となるポーン前進が必要","✓ 相手のルーク・クイーンが守っているかどうかを常に確認する"],
+    pointsEn:["✓ After castling, un-moved pawns make the back rank a weakness","✓ Invade with a rook or queen to deliver checkmate on the back rank","✓ To prevent this, advance a pawn to create an escape square for the king","✓ Always check whether the opponent's rooks/queen cover the back rank"],
   },
   {
     id:"discovered_attack", nameJa:"ディスカバードアタック", nameEn:"Discovered Attack", direct:true,
@@ -191,6 +253,8 @@ export const CHESS_TACTICS = [
     fen:"r1bqkb1r/ppp2ppp/2np1n2/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 1",
     moves:["c3d5"],
     moveComments:{ja:["初期配置：白ナイトc3の後ろにビショップc4が控えている","ナイトがd5へ動くとビショップの攻撃ラインが開く！陰の攻撃"],en:["Starting position: bishop c4 hidden behind knight c3","Moving the knight to d5 reveals the bishop's attack line! Discovered attack"]},
+    pointsJa:["✓ 前の駒を動かすことで、後ろの駒の攻撃ラインが開放される","✓ 動かした駒も別の脅威を作れれば「二重攻撃」になる","✓ ディスカバードチェックは相手がキングを動かすしかない最強形","✓ 駒の配置を整えて「ラインが開く手」を事前に準備しておく"],
+    pointsEn:["✓ Moving the front piece reveals an attack from the piece behind it","✓ If the moved piece also creates a threat, it becomes a double attack","✓ Discovered check forces the king to move — the strongest form","✓ Set up lines in advance so a future move unleashes a hidden attack"],
   },
   {
     id:"double_attack", nameJa:"ダブルチェック", nameEn:"Double Check", direct:true,
@@ -199,6 +263,8 @@ export const CHESS_TACTICS = [
     fen:"r1bqkb1r/ppp2ppp/2np4/4p3/2BnP3/2NP1N2/PPP2PPP/R1BQK2R w KQkq - 0 1",
     moves:["f3e5"],
     moveComments:{ja:["初期配置：白ナイトf3、白ビショップc4が黒キングe8を狙える","ナイトがe5へ！ナイトとビショップの両方でダブルチェック！"],en:["Starting position: white knight f3 and bishop c4 targeting Black king","Knight to e5! Double check from both knight and bishop!"]},
+    pointsJa:["✓ 1手で2つ以上の脅威を同時にかける手筋","✓ 相手は1つしか対応できないため必ずどちらかが通る","✓ ダブルチェック（同時に2枚でチェック）は合い駒が不可能","✓ フォーク・ディスカバードアタック・チェック+攻撃の組み合わせが代表的"],
+    pointsEn:["✓ Create two or more threats in a single move","✓ The opponent can only address one — the other always lands","✓ Double check (two pieces checking simultaneously) cannot be blocked","✓ Classic forms: fork, discovered attack, check + another threat combined"],
   },
   {
     id:"zwischenzug", nameJa:"ツヴィッシェンツーク", nameEn:"Zwischenzug", direct:true,
@@ -207,6 +273,8 @@ export const CHESS_TACTICS = [
     fen:"r1bqk2r/pppp1ppp/2n2n2/2b5/2BpP3/5N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
     moves:["c4f7"],
     moveComments:{ja:["初期配置：白が取り返しを期待されている局面","ビショップをf7へ捨てる間の手！相手が期待した手を無視して優先する"],en:["Starting position: White is expected to recapture","Sacrifice bishop to f7 as the in-between move! Ignoring what the opponent expects"]},
+    pointsJa:["✓ 相手が期待する応手を無視して、より価値の高い中間手を優先する","✓ テンポを得ながら相手の計算を完全に狂わせる高度な手筋","✓ 取り返す前に決定的な脅威を挿入することが多い","✓ 相手は中間手に対応しなければならず、主導権を失う"],
+    pointsEn:["✓ Ignore the expected reply and insert a more powerful intermediate move","✓ Disrupts the opponent's calculations completely while gaining tempo","✓ Often involves inserting a decisive threat before recapturing","✓ Forces the opponent to react, surrendering the initiative"],
   },
   // Others shown via "more" button
   {
@@ -216,6 +284,8 @@ export const CHESS_TACTICS = [
     fen:"6k1/3r1ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1",
     moves:["d1d7"],
     moveComments:{ja:["初期配置：黒ルークd7が複数の防衛任務を持つ","ルークをd7へ！守りを担った駒をオーバーロードさせる"],en:["Starting position: Black rook on d7 has multiple defensive duties","Rook to d7! Overload the piece carrying the defensive burden"]},
+    pointsJa:["✓ 1つの駒が複数の守備任務を同時に担っている状況を利用する","✓ その駒に2つ以上の脅威をかけると両方対応できなくなる","✓ 「相手の駒が何を守っているか」を読む習慣が重要","✓ 実行後、守りを失ったマス・駒を確実に取る"],
+    pointsEn:["✓ Exploit a piece that is simultaneously defending multiple targets","✓ Create two threats on that piece — it cannot fulfill both duties","✓ Train yourself to ask: 'What is that piece defending?'","✓ After the overload, immediately take the now-undefended target"],
   },
   {
     id:"deflection", nameJa:"そらし", nameEn:"Deflection", direct:false,
@@ -224,6 +294,8 @@ export const CHESS_TACTICS = [
     fen:"3r2k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1",
     moves:["d1d8"],
     moveComments:{ja:["初期配置：黒ルークd8が守りの要","ルークをd8へ捨てる！守りの駒をそらして詰みへ"],en:["Starting position: Black rook on d8 is the key defender","Sacrifice rook to d8! Deflect the defender to force mate"]},
+    pointsJa:["✓ 守りの要となる駒を捨て駒などで別の場所へ引き離す","✓ 守り駒が離れた後、守られていたマス・駒を攻撃する","✓ 相手が捨て駒を取ると守りが崩れる「引き付け」のパターン","✓ クイーン・ルークなど価値の高い守り駒を動かすと効果的"],
+    pointsEn:["✓ Lure away the key defensive piece with a sacrifice or strong threat","✓ Once the defender moves, attack the now-unprotected target","✓ If the opponent takes the sacrifice, the defense collapses","✓ Most effective when a high-value piece (queen/rook) is the defender"],
   },
   {
     id:"decoy", nameJa:"おびき寄せ", nameEn:"Decoy", direct:false,
@@ -232,6 +304,8 @@ export const CHESS_TACTICS = [
     fen:"6k1/5ppp/8/8/8/8/5PPP/Q5K1 w - - 0 1",
     moves:["a1a8"],
     moveComments:{ja:["初期配置：白クイーンa1、黒キングg8","クイーンをa8へ！黒キングを不利な位置に誘い込む"],en:["Starting position: white queen a1, Black king g8","Queen to a8! Lure the king to an unfavorable position"]},
+    pointsJa:["✓ 相手の重要な駒を不利なマスに誘い込んで攻撃する","✓ 捨て駒で相手を誘導し、その後決定的な手を放つ","✓ キングを攻撃されやすい場所・詰みやすい場所へ誘導する","✓ 相手が誘いに乗った瞬間が攻撃のチャンス"],
+    pointsEn:["✓ Entice the opponent's key piece to a disadvantageous square","✓ Use a sacrifice to lure the piece, then deliver the decisive blow","✓ Guide the king toward exposed squares or checkmate patterns","✓ The moment the opponent takes the bait is your attacking opportunity"],
   },
   {
     id:"zugzwang", nameJa:"ツークツワング", nameEn:"Zugzwang", direct:false,
@@ -240,6 +314,8 @@ export const CHESS_TACTICS = [
     fen:"8/8/8/2k5/8/2K5/8/8 w - - 0 1",
     moves:["c3c4"],
     moveComments:{ja:["初期配置：キング同士が向き合うエンドゲーム","白Kc4でオポジション確立！黒はどこに動いても不利になるツークツワング"],en:["Starting position: king endgame with kings facing","White Kc4 takes opposition! Black is in zugzwang — any move is worse"]},
+    pointsJa:["✓ どの手を指しても局面が悪化する「動かしたくない」状態","✓ エンドゲームのキング対決（オポジション争い）で頻出","✓ オポジション（キング同士が奇数マスの距離）が鍵","✓ 相手を先に動かさせることで有利な位置を占める"],
+    pointsEn:["✓ A position where any move worsens your own situation","✓ Appears frequently in king endgames during the opposition battle","✓ Opposition (kings separated by an odd number of squares) is the key concept","✓ Force the opponent to move first, then occupy the favorable square"],
   },
   {
     id:"xray", nameJa:"Xレイアタック", nameEn:"X-ray Attack", direct:false,
@@ -248,6 +324,8 @@ export const CHESS_TACTICS = [
     fen:"4k3/8/8/3r4/8/8/8/R3K3 w Q - 0 1",
     moves:["a1a5"],
     moveComments:{ja:["初期配置：白ルークa1、黒ルークd5が視野に","ルークがa5へ！黒ルークを通り越してXレイ攻撃を成立させる"],en:["Starting position: white rook a1, Black rook d5 in view","Rook to a5! X-ray attack passing through the Black rook"]},
+    pointsJa:["✓ 間に駒がある場合でも、その奥の駒を間接的に攻撃・守る","✓ ルーク同士・ビショップ同士・クイーンで起きやすい","✓ 間の駒が取られると奥の駒が無防備になる場合がある","✓ Xレイで守られたマスは「実際には守られていない」と錯覚しやすい"],
+    pointsEn:["✓ Indirectly attack or defend through an intervening piece","✓ Most common with rook vs rook, bishop vs bishop, or queen lines","✓ If the middle piece is captured, the piece behind becomes undefended","✓ X-ray defended squares can be deceptive — look through the pieces"],
   },
   {
     id:"endgame", nameJa:"エンドゲーム", nameEn:"Endgame", direct:false,
@@ -256,6 +334,8 @@ export const CHESS_TACTICS = [
     fen:"4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
     moves:["e1d2","e8d7","e2e4"],
     moveComments:{ja:["初期配置：白キング+ポーン vs 黒キング","白Kd2：キングを前進させてポーンをサポート","黒Kd7：相手キングも接近して対抗","白e4：ポーンも前進して昇格を目指す"],en:["Starting position: White king + pawn vs Black king","White Kd2: king advances to support the pawn","Black Kd7: enemy king approaches to contest","White e4: pawn advances toward promotion"]},
+    pointsJa:["✓ エンドゲームではキングが強力な攻撃駒として機能する","✓ パスポーン（相手のポーンに妨害されないポーン）を昇格させる","✓ オポジション確立でキングの前進をサポートする","✓ 少ない駒での精密な計算と正確な手順が勝利の鍵"],
+    pointsEn:["✓ In the endgame, the king becomes a powerful attacking piece","✓ Push the passed pawn (a pawn with no opposing pawns blocking it) to promotion","✓ Establish opposition to support your king's advance","✓ Precise calculation and accurate move order are the keys to victory"],
   },
 ];
 

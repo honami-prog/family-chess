@@ -4668,7 +4668,7 @@ function _stratApplyMove(bd, uci) {
 }
 
 // ── StrategyModal ─────────────────────────────────────────────────────
-function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
+function StrategyModal({ theme, playerLang, serif, onClose, onPractice, allThemes, onOpenOther, listLabel }) {
   const [step, setStep] = useState(0);
 
   // Responsive board size — same formula as OpeningDetailView
@@ -4804,6 +4804,28 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
           ))}
         </div>
 
+        {/* Same-category list tags */}
+        {allThemes && allThemes.length > 0 && onOpenOther && (
+          <div style={{marginTop:4,marginBottom:14}}>
+            <div style={{fontSize:14,letterSpacing:"2px",color:"#a89070",textTransform:"uppercase",marginBottom:6}}>
+              {playerLang==="en" ? (listLabel?.en||"Themes") : (listLabel?.ja||"テーマ一覧")}
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {allThemes.map(th=>{
+                const isCurrent = th.id === theme.id;
+                return (
+                  <button key={th.id} onClick={()=>onOpenOther(th)}
+                    style={{background:isCurrent?"#c8a86a":"#faf5e8",border:"1px solid #c8b090",borderRadius:14,color:isCurrent?"#fff":"#5a3e28",padding:"3px 12px",cursor:"pointer",fontSize:16,fontFamily:serif,whiteSpace:"nowrap",fontWeight:isCurrent?700:400}}
+                    onMouseEnter={e=>{ if(!isCurrent) e.currentTarget.style.background="#eddcb8"; }}
+                    onMouseLeave={e=>{ if(!isCurrent) e.currentTarget.style.background="#faf5e8"; }}>
+                    {playerLang==="en"?th.nameEn:th.nameJa}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Practice button — only for themes with a valid 1-to-1 Lichess tactics theme */}
         {canPractice && (
           <button onClick={()=>onPractice(theme)} style={{display:"block",width:"100%",background:"#c8a86a",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:serif,marginBottom:8}}>
@@ -4818,7 +4840,7 @@ function StrategyModal({ theme, playerLang, serif, onClose, onPractice }) {
   );
 }
 
-function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="", onAnalyze, startInFullScreen=false, onSwitchToGame, onFsConsumed, onOpenOpening, onOpenTactic}) {
+function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="", onAnalyze, startInFullScreen=false, onSwitchToGame, onFsConsumed, onOpenOpening, onOpenTactic, requestTacticsStart, onTacticsStartConsumed}) {
   const boardKey = `chessPracticeBoard_${playerName}`;
   const capKey = `chessPracticeCapPieces_${playerName}`;
   const [board, setBoard] = useState(()=>{
@@ -4861,6 +4883,17 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsError, setTacticsError] = useState(null);
   const [tacticsStatusMsg, setTacticsStatusMsg] = useState(null); // shown during 429 retry wait
   const tacticsRestoredRef = useRef(false); // true during localStorage restore → skip initial fetch
+  // External tactics start request (from OpeningDetailView practice button)
+  useEffect(() => {
+    if (requestTacticsStart) {
+      setTacticsTheme(requestTacticsStart.theme || null);
+      setTacticsDiff(null);
+      setTacticsMovesFilter(null);
+      setVsAI(false);
+      setTacticsMode(true);
+      if (onTacticsStartConsumed) onTacticsStartConsumed();
+    }
+  }, [requestTacticsStart]);
   // AI mode
   const [vsAI, setVsAI] = useState(false);
   const [aiLevel, setAiLevel] = useState(3);
@@ -6265,26 +6298,14 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           {tacticsDiffSelectModal}
           {strategyOpen && (
             <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
-              onPractice={(theme)=>{
-                setStrategyOpen(null);
-                setTacticsTheme(theme.tacticTheme);
-                setTacticsDiff(null);
-                setTacticsMovesFilter(null);
-                setVsAI(false);
-                setTacticsMode(true);
-              }}
+              onPractice={(theme)=>{ setStrategyOpen(null); setTacticsTheme(theme.tacticTheme); setTacticsDiff(null); setTacticsMovesFilter(null); setVsAI(false); setTacticsMode(true); }}
+              allThemes={CHESS_STRATEGY} onOpenOther={(t)=>setStrategyOpen(t)} listLabel={{ja:"ストラテジー一覧",en:"Strategy"}}
             />
           )}
           {endgameOpen && (
             <StrategyModal theme={endgameOpen} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpen(null)}
-              onPractice={(theme)=>{
-                setEndgameOpen(null);
-                setTacticsTheme(theme.tacticTheme);
-                setTacticsDiff(null);
-                setTacticsMovesFilter(null);
-                setVsAI(false);
-                setTacticsMode(true);
-              }}
+              onPractice={(theme)=>{ setEndgameOpen(null); setTacticsTheme(theme.tacticTheme); setTacticsDiff(null); setTacticsMovesFilter(null); setVsAI(false); setTacticsMode(true); }}
+              allThemes={CHESS_ENDGAME} onOpenOther={(t)=>setEndgameOpen(t)} listLabel={{ja:"エンドゲーム一覧",en:"Endgame"}}
             />
           )}
         </>
@@ -6326,14 +6347,14 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         {tacticsDiffSelectModal}
         {strategyOpen && (
           <StrategyModal theme={strategyOpen} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpen(null)}
-            onPractice={(theme)=>{
-              setStrategyOpen(null);
-              setTacticsTheme(theme.tacticTheme);
-              setTacticsDiff(null);
-              setTacticsMovesFilter(null);
-              setVsAI(false);
-              setTacticsMode(true);
-            }}
+            onPractice={(theme)=>{ setStrategyOpen(null); setTacticsTheme(theme.tacticTheme); setTacticsDiff(null); setTacticsMovesFilter(null); setVsAI(false); setTacticsMode(true); }}
+            allThemes={CHESS_STRATEGY} onOpenOther={(t)=>setStrategyOpen(t)} listLabel={{ja:"ストラテジー一覧",en:"Strategy"}}
+          />
+        )}
+        {endgameOpen && (
+          <StrategyModal theme={endgameOpen} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpen(null)}
+            onPractice={(theme)=>{ setEndgameOpen(null); setTacticsTheme(theme.tacticTheme); setTacticsDiff(null); setTacticsMovesFilter(null); setVsAI(false); setTacticsMode(true); }}
+            allThemes={CHESS_ENDGAME} onOpenOther={(t)=>setEndgameOpen(t)} listLabel={{ja:"エンドゲーム一覧",en:"Endgame"}}
           />
         )}
       </>
@@ -6444,14 +6465,8 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           playerLang={playerLang}
           serif={serif}
           onClose={()=>setStrategyOpen(null)}
-          onPractice={(theme)=>{
-            setStrategyOpen(null);
-            setTacticsTheme(theme.tacticTheme);
-            setTacticsDiff(null);
-            setTacticsMovesFilter(null);
-            setVsAI(false);
-            setTacticsMode(true);
-          }}
+          onPractice={(theme)=>{ setStrategyOpen(null); setTacticsTheme(theme.tacticTheme); setTacticsDiff(null); setTacticsMovesFilter(null); setVsAI(false); setTacticsMode(true); }}
+          allThemes={CHESS_STRATEGY} onOpenOther={(t)=>setStrategyOpen(t)} listLabel={{ja:"ストラテジー一覧",en:"Strategy"}}
         />
       )}
       {endgameOpen && (
@@ -6460,14 +6475,8 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           playerLang={playerLang}
           serif={serif}
           onClose={()=>setEndgameOpen(null)}
-          onPractice={(theme)=>{
-            setEndgameOpen(null);
-            setTacticsTheme(theme.tacticTheme);
-            setTacticsDiff(null);
-            setTacticsMovesFilter(null);
-            setVsAI(false);
-            setTacticsMode(true);
-          }}
+          onPractice={(theme)=>{ setEndgameOpen(null); setTacticsTheme(theme.tacticTheme); setTacticsDiff(null); setTacticsMovesFilter(null); setVsAI(false); setTacticsMode(true); }}
+          allThemes={CHESS_ENDGAME} onOpenOther={(t)=>setEndgameOpen(t)} listLabel={{ja:"エンドゲーム一覧",en:"Endgame"}}
         />
       )}
     </>
@@ -7672,11 +7681,13 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
           {strategyOpenS && (
             <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
               onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+              allThemes={SHOGI_STRATEGY} onOpenOther={(t)=>setStrategyOpenS(t)} listLabel={{ja:"ストラテジー一覧",en:"Strategy"}}
             />
           )}
           {endgameOpenS && (
             <StrategyModal theme={endgameOpenS} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpenS(null)}
               onPractice={(theme)=>{ setEndgameOpenS(null); setTacticsModeS(true); }}
+              allThemes={SHOGI_ENDGAME} onOpenOther={(t)=>setEndgameOpenS(t)} listLabel={{ja:"エンドゲーム一覧",en:"Endgame"}}
             />
           )}
         </>
@@ -7718,11 +7729,13 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         {strategyOpenS && (
           <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
             onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+            allThemes={SHOGI_STRATEGY} onOpenOther={(t)=>setStrategyOpenS(t)} listLabel={{ja:"ストラテジー一覧",en:"Strategy"}}
           />
         )}
         {endgameOpenS && (
           <StrategyModal theme={endgameOpenS} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpenS(null)}
             onPractice={(theme)=>{ setEndgameOpenS(null); setTacticsModeS(true); }}
+            allThemes={SHOGI_ENDGAME} onOpenOther={(t)=>setEndgameOpenS(t)} listLabel={{ja:"エンドゲーム一覧",en:"Endgame"}}
           />
         )}
       </>
@@ -7841,18 +7854,20 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       {strategyOpenS && (
         <StrategyModal theme={strategyOpenS} playerLang={playerLang} serif={serif} onClose={()=>setStrategyOpenS(null)}
           onPractice={(theme)=>{ setStrategyOpenS(null); setTacticsModeS(true); }}
+          allThemes={SHOGI_STRATEGY} onOpenOther={(t)=>setStrategyOpenS(t)} listLabel={{ja:"ストラテジー一覧",en:"Strategy"}}
         />
       )}
       {endgameOpenS && (
         <StrategyModal theme={endgameOpenS} playerLang={playerLang} serif={serif} onClose={()=>setEndgameOpenS(null)}
           onPractice={(theme)=>{ setEndgameOpenS(null); setTacticsModeS(true); }}
+          allThemes={SHOGI_ENDGAME} onOpenOther={(t)=>setEndgameOpenS(t)} listLabel={{ja:"エンドゲーム一覧",en:"Endgame"}}
         />
       )}
     </>
   );
 }
 
-function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, onClose, onOpenOther }) {
+function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, onClose, onOpenOther, onPractice }) {
   const { game, gameType, nameJa, nameEn, descJa, descEn } = openingData;
   const history = game.history || [];
   const isChess = gameType === "chess";
@@ -7991,6 +8006,13 @@ function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, 
   const coordH  = Math.max(10, Math.floor(cellSize * 0.22));
   const coordLbl = {display:"flex",alignItems:"center",justifyContent:"center",color:"#7a5c38",fontSize:coordFs,fontFamily:"Georgia,serif",userSelect:"none",opacity:0.72,fontWeight:400,letterSpacing:"0.04em"};
 
+  // Category badge and key points from opening data
+  const openingMeta = allOpenings.find(o => o.id === game.id.replace("opening_","")) || {};
+  const catLabel = playerLang === "en" ? (openingMeta.categoryEn || "") : (openingMeta.category || "");
+  const catColor = isChess ? "#5a8a5a" : "#5a7aaa";
+  const points = playerLang === "en" ? (openingMeta.pointsEn || []) : (openingMeta.pointsJa || []);
+  const bodyFs = 17;
+
   // Render chess board with rank/file coordinates
   const chessBoardEl = chessBoard && (
     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start"}}>
@@ -8075,6 +8097,13 @@ function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, 
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#f5ead8",padding:"4px 12px",cursor:"pointer",fontSize:17,fontFamily:serif}}>✕</button>
         </div>
 
+        {/* Badges */}
+        {catLabel && (
+          <div style={{display:"flex",gap:6,padding:"8px 16px 0",flexWrap:"wrap"}}>
+            <span style={{background:catColor,color:"#fff",borderRadius:8,padding:"2px 8px",fontSize:13,fontWeight:600}}>{catLabel}</span>
+          </div>
+        )}
+
         {/* Board */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"14px 16px 8px",gap:10}}>
           <div style={{position:"relative"}}>
@@ -8108,6 +8137,18 @@ function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, 
           </div>
         </div>
 
+        {/* Key Points */}
+        {points.length > 0 && (
+          <div style={{margin:"0 16px 12px",background:"rgba(100,80,40,0.07)",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{fontWeight:700,fontSize:16,color:"#7a5838",marginBottom:8,letterSpacing:0.5,fontFamily:serif}}>
+              {playerLang==="en"?"Key Points":"ポイント"}
+            </div>
+            {points.map((pt,i)=>(
+              <div key={i} style={{fontSize:bodyFs,color:"#5a3c18",marginBottom:i<points.length-1?6:0,lineHeight:1.6,fontFamily:serif}}>{pt}</div>
+            ))}
+          </div>
+        )}
+
         {/* Other openings */}
         {allOpenings.length > 0 && (
           <div style={{margin:"0 16px 16px"}}>
@@ -8127,6 +8168,15 @@ function OpeningDetailView({ openingData, allOpenings, playerLang, getShogiImg, 
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Practice button (chess only) */}
+        {onPractice && (
+          <div style={{margin:"0 16px 12px"}}>
+            <button onClick={onPractice} style={{display:"block",width:"100%",background:"#c8a86a",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:serif}}>
+              {playerLang==="en"?"Practice with Opening Tactics →":"この定石をタクティクスで練習する →"}
+            </button>
           </div>
         )}
       </div>
@@ -8175,6 +8225,12 @@ function TacticsDetailView({ tacticsData, allTactics, playerLang, onClose, onOpe
   const maxStep = (tactic.moves || []).length;
   const bodyFs = playerLang === "en" ? 17 : 16;
   const navBtn = {background:"#fdf6e8",border:"1px solid #c8b090",borderRadius:6,color:"#7a5838",padding:"4px 10px",cursor:"pointer",fontSize:16,fontFamily:serif};
+  // Difficulty badge derived from direct flag
+  const isBasic = tactic.direct === true;
+  const lvlColor = isBasic ? "#4a9" : "#c90";
+  const lvlLabel = playerLang === "en" ? (isBasic ? "Basic" : "Intermediate") : (isBasic ? "基本" : "応用");
+  // Key points
+  const points = playerLang === "en" ? (tactic.pointsEn || []) : (tactic.pointsJa || []);
 
   // Coordinate label style — same as StrategyModal
   const coordFs = Math.max(9, Math.floor(cellSize * 0.18));
@@ -8192,6 +8248,14 @@ function TacticsDetailView({ tacticsData, allTactics, playerLang, onClose, onOpe
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#f5ead8",padding:"4px 12px",cursor:"pointer",fontSize:17,fontFamily:serif}}>✕</button>
         </div>
         <div style={{padding:"16px"}}>
+          {/* Badges */}
+          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+            <span style={{background:lvlColor,color:"#fff",borderRadius:8,padding:"2px 8px",fontSize:13,fontWeight:600}}>{lvlLabel}</span>
+            <span style={{background:"rgba(100,80,40,0.1)",color:"#7a5838",borderRadius:8,padding:"2px 8px",fontSize:13,fontWeight:500}}>
+              {playerLang==="en"?"Tactics":"タクティクス"}
+            </span>
+          </div>
+
           {/* Description */}
           <div style={{background:"#faf5e8",border:"1px solid #e0d0b0",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
             <div style={{fontSize:bodyFs,color:"#4a3020",lineHeight:1.7}}>
@@ -8246,6 +8310,18 @@ function TacticsDetailView({ tacticsData, allTactics, playerLang, onClose, onOpe
             </div>
           )}
 
+          {/* Key Points */}
+          {points.length > 0 && (
+            <div style={{background:"rgba(100,80,40,0.07)",borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+              <div style={{fontWeight:700,fontSize:16,color:"#7a5838",marginBottom:8,letterSpacing:0.5}}>
+                {playerLang==="en"?"Key Points":"ポイント"}
+              </div>
+              {points.map((pt,i)=>(
+                <div key={i} style={{fontSize:bodyFs,color:"#5a3c18",marginBottom:i<points.length-1?6:0,lineHeight:1.6}}>{pt}</div>
+              ))}
+            </div>
+          )}
+
           {/* Tactics list */}
           {allTactics.length > 0 && (
             <div>
@@ -8283,6 +8359,7 @@ export default function App() {
   const [analysisData, setAnalysisData] = useState(null); // {game, gameType}
   const [openingData, setOpeningData] = useState(null);   // {game, gameType, staticEvals, descJa, descEn, nameJa, nameEn}
   const [tacticsData, setTacticsData] = useState(null); // {tactic, gameType}
+  const [chessTacticsRequest, setChessTacticsRequest] = useState(null); // {theme} — triggers ChessPracticeBoard to start tactics
   const [showAnalysisList, setShowAnalysisList] = useState(false);
   // 解析新着バッジ
   const [analysisNewTs, setAnalysisNewTs] = useState(() => { try { return localStorage.getItem("analysisNewTs") || ""; } catch { return ""; } });
@@ -9571,7 +9648,7 @@ export default function App() {
                   </button>
                 </div>
                 {practiceType==="chess"
-                  ? <ChessPracticeBoard key={playerName} playerLang={playerLang} pcLayout={true} hideRules={true} playerName={playerName} onAnalyze={handlePracticeAnalyze} startInFullScreen={practiceStartFs} onSwitchToGame={handleSwitchPracticeGame} onFsConsumed={()=>setPracticeStartFs(false)} onOpenOpening={openOpening} onOpenTactic={openTactic}/>
+                  ? <ChessPracticeBoard key={playerName} playerLang={playerLang} pcLayout={true} hideRules={true} playerName={playerName} onAnalyze={handlePracticeAnalyze} startInFullScreen={practiceStartFs} onSwitchToGame={handleSwitchPracticeGame} onFsConsumed={()=>setPracticeStartFs(false)} onOpenOpening={openOpening} onOpenTactic={openTactic} requestTacticsStart={chessTacticsRequest} onTacticsStartConsumed={()=>setChessTacticsRequest(null)}/>
                   : <ShogiPracticeBoard key={playerName} playerLang={playerLang} pcLayout={true} hideRules={true} playerName={playerName} onAnalyze={handlePracticeAnalyze} startInFullScreen={practiceStartFs} onSwitchToGame={handleSwitchPracticeGame} onFsConsumed={()=>setPracticeStartFs(false)} onOpenOpening={openOpening} onOpenTactic={openTactic}/>
                 }
               </>
@@ -9757,7 +9834,7 @@ export default function App() {
                 </button>
               </div>
               {practiceType==="chess"
-                ? <ChessPracticeBoard key={playerName} playerLang={playerLang} pcLayout={false} playerName={playerName} onAnalyze={handlePracticeAnalyze} startInFullScreen={practiceStartFs} onSwitchToGame={handleSwitchPracticeGame} onFsConsumed={()=>setPracticeStartFs(false)} onOpenOpening={openOpening} onOpenTactic={openTactic}/>
+                ? <ChessPracticeBoard key={playerName} playerLang={playerLang} pcLayout={false} playerName={playerName} onAnalyze={handlePracticeAnalyze} startInFullScreen={practiceStartFs} onSwitchToGame={handleSwitchPracticeGame} onFsConsumed={()=>setPracticeStartFs(false)} onOpenOpening={openOpening} onOpenTactic={openTactic} requestTacticsStart={chessTacticsRequest} onTacticsStartConsumed={()=>setChessTacticsRequest(null)}/>
                 : <ShogiPracticeBoard key={playerName} playerLang={playerLang} pcLayout={false} playerName={playerName} onAnalyze={handlePracticeAnalyze} startInFullScreen={practiceStartFs} onSwitchToGame={handleSwitchPracticeGame} onFsConsumed={()=>setPracticeStartFs(false)} onOpenOpening={openOpening} onOpenTactic={openTactic}/>
               }
               {toggleTabletLayout && (
@@ -10367,6 +10444,7 @@ export default function App() {
         getShogiImg={getShogiImg}
         onClose={() => setOpeningData(null)}
         onOpenOther={(o) => openOpening(o, openingData.gameType)}
+        onPractice={openingData.gameType==="chess" ? ()=>{ setOpeningData(null); setChessTacticsRequest({theme:"opening"}); } : null}
       />
     )}
     {/* ── タクティクスビュー ── */}
