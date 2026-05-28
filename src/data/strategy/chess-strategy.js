@@ -134,11 +134,11 @@ export const CHESS_STRATEGY = [
     category: "ポーン構造", categoryEn: "Pawn Structure",
     descriptionJa: "パスポーンとは、前進を阻むポーンが相手に存在しないポーンのことです。エンドゲームで最強の駒のひとつとなり、プロモーション（クイーンへの昇格）を脅かし続けます。\n\n「パスポーンは押し進めるべし」という格言があります。パスポーンは常に前進させてポーンブレイクを目指しましょう。\n\nパスポーンを持っている側はエンドゲームで有利なことが多く、相手は常にそのポーンを気にしなければなりません。",
     descriptionEn: "A passed pawn has no opposing pawn blocking its path or on adjacent files. In the endgame, it becomes one of the most powerful pieces, constantly threatening to promote.\n\n'A passed pawn must be pushed' is a classic chess maxim. Always advance passed pawns toward promotion.\n\nHaving a passed pawn in the endgame is often a decisive advantage — the opponent must constantly deal with the promotion threat.",
-    fen: "8/8/4k3/4p3/3PP3/8/8/4K3 w - - 0 1",
-    moves: ["d4d5", "e5d4", "e4e5"],
+    fen: "8/8/4k3/8/3PP3/8/8/4K3 w - - 0 1",
+    moves: ["d4d5", "e6e7", "e4e5"],
     moveComments: {
-      ja: ["白の連結ポーン vs 黒のe5ポーン", "白d5: 黒のe5ポーンをパスポーンにする", "黒がd5のポーンを取る", "白e5: 白のパスポーン誕生 — プロモーションを脅かす"],
-      en: ["White connected pawns vs Black's e5 pawn", "White d5: creates a passed e-pawn for Black", "Black captures on d5", "White e5: a passed pawn is born — promotion threat begins"]
+      ja: ["白の連結パスポーン — 黒のキングで守る局面", "白d5: 前進して黒のキングを後退させる", "黒Ke7: キングでポーンを阻止しようとする", "白e5: 2枚目のパスポーンも前進 — 止められない！"],
+      en: ["White connected passed pawns vs Black's king", "White d5: advances, forcing the Black king back", "Black Ke7: king tries to blockade the pawn", "White e5: second passer joins the march — unstoppable!"]
     },
     pointsJa: [
       "✓ パスポーンはエンドゲームで決定的な強みになる",
@@ -194,7 +194,7 @@ export const CHESS_STRATEGY = [
     category: "ポーン構造", categoryEn: "Pawn Structure",
     descriptionJa: "孤立ポーンとは、隣の縦列にポーンがない状態のポーンです。両隣のポーンに支えてもらえないため、弱点になりやすいです。\n\nアイソレーテッドクイーンズポーン（IQP）はd5マスへの影響力と駒の活動性という補償を持ちますが、エンドゲームでは守りにくい弱点になります。\n\n孤立ポーンを持つ側は攻撃的なプレーを心がけ、エンドゲームに入る前に攻撃を成功させることが理想です。",
     descriptionEn: "An isolated pawn has no friendly pawns on adjacent files. Without neighboring pawn support, it becomes a target.\n\nThe Isolated Queen's Pawn (IQP) offers compensation through space and piece activity, especially control of d5 — but it becomes a clear weakness in endgames.\n\nWith an IQP, play aggressively and win in the middlegame before the endgame weakness becomes decisive.",
-    fen: "r1bqr1k1/pp3ppp/2n2n2/3pp3/3P4/2NB1N2/PPP2PPP/R1BQ1RK1 w - - 0 9",
+    fen: "r1bqr1k1/pp3ppp/2n2n2/4p3/3P4/2NB1N2/PPP2PPP/R1BQ1RK1 w - - 0 9",
     moves: ["d4d5"],
     moveComments: {
       ja: ["アイソレーテッドクイーンズポーン (IQP) の典型局面", "白d5: ポーンを前進させて攻撃的に — IQPの典型的な活用"],
@@ -255,11 +255,11 @@ export const CHESS_STRATEGY = [
     category: "駒の概念", categoryEn: "Piece Concepts",
     descriptionJa: "オープンファイル（開いた縦列）とは、両側のポーンが存在しない縦列のことです。ルークとクイーンが最大限の力を発揮できる場所です。\n\nルークをオープンファイルに配置すると、そのファイルを通じて相手陣に強力な圧力をかけられます。2枚のルークを同じオープンファイルに重ねる「二重ルーク」も強力な形です。\n\nオープンファイルを支配するために、ルークを積極的に展開しましょう。",
     descriptionEn: "An open file has no pawns of either color. It's the highway where rooks and queens exert maximum power.\n\nPlacing a rook on an open file puts direct pressure down the file toward the opponent's position. Doubling two rooks on the same open file (doubled rooks) is especially powerful.\n\nControl open files by actively placing your rooks on them.",
-    fen: "r1bq1rk1/ppp2ppp/2n5/3pn3/3P4/2N1PN2/PPP2PPP/R2QKB1R w KQ - 0 8",
-    moves: ["e1d2", "d8d7", "h1e1"],
+    fen: "r2q1rk1/ppp2ppp/2n2n2/3p4/3P4/2N2N2/PPP2PPP/R2Q1RK1 w - - 0 8",
+    moves: ["f1e1", "f8e8"],
     moveComments: {
-      ja: ["e・dファイルが開かれつつある局面", "白Kd2: キングを移動してe1をルークのために開ける", "黒Qd7: クイーンをオープンファイルに向ける", "白Re1: eファイルのオープンファイルにルークを配置"],
-      en: ["Position with semi-open e and d files", "White Kd2: moves king to open e1 for the rook", "Black Qd7: queen eyes the open files", "White Re1: rook on the open e-file — maximum pressure"]
+      ja: ["双方キャスリング済み — eファイルがオープン", "白Re1: オープンeファイルにルークを配置", "黒Re8: 黒もeファイルへ — オープンファイルの支配権争い"],
+      en: ["Both sides castled — e-file is open", "White Re1: rook claims the open e-file", "Black Re8: Black contests the e-file — open file battle"]
     },
     pointsJa: [
       "✓ ルークはオープンファイルまたはセミオープンファイルに配置",
@@ -407,10 +407,10 @@ export const CHESS_STRATEGY = [
     descriptionJa: "ミドルゲームでは、単に良い手を指すだけでなく、具体的な計画を立てることが重要です。\n\n計画の立て方: まずポジションを評価する（マテリアル差・キングの安全・ポーン構造・駒の活性）。次に弱点を特定し、その弱点を攻める具体的な計画を立てる。\n\n相手にも計画があることを忘れずに。自分の計画を実行しながら、相手の計画を妨害することがミドルゲームの本質です。",
     descriptionEn: "In the middlegame, making good moves is not enough — you need a concrete plan.\n\nHow to plan: first evaluate the position (material, king safety, pawn structure, piece activity). Then identify the weaknesses and form a plan to exploit them.\n\nRemember the opponent also has plans. Executing your plan while disrupting theirs is the essence of middlegame chess.",
     fen: "r1bq1rk1/pp3ppp/2n1pn2/2pp4/3P4/2PB1N2/PP3PPP/R1BQ1RK1 w - - 0 9",
-    moves: ["c1f4", "d5d4", "c3d4"],
+    moves: ["c1f4", "c5d4", "c3d4"],
     moveComments: {
-      ja: ["ミドルゲームの典型的な局面", "白Bf4: 駒を活性化してd6への圧力を準備", "黒d4: ポーンを突いて白中央を崩す試み", "白cxd4: 中央を再構築 — c・dファイルが半オープンに"],
-      en: ["Typical middlegame position", "White Bf4: activating the bishop, preparing pressure on d6", "Black d4: pawn break attempt to disrupt White's center", "White cxd4: recapture, creating semi-open c and d files"]
+      ja: ["ミドルゲームの典型的な局面", "白Bf4: 駒を活性化してd6への圧力を準備", "黒cxd4: c5ポーンで白d4を取る — 中央の緊張を解消", "白cxd4: 中央を再構築 — c・dファイルが半オープンに"],
+      en: ["Typical middlegame position", "White Bf4: activating the bishop, preparing pressure on d6", "Black cxd4: captures on d4 — releasing central tension", "White cxd4: recapture, creating semi-open c and d files"]
     },
     pointsJa: [
       "✓ 常に具体的な計画を持って指す",
@@ -437,10 +437,10 @@ export const CHESS_STRATEGY = [
     descriptionJa: "エンドゲームはキングが積極的な役割を担う特別なフェーズです。ミドルゲームと正反対に、キングを中央に進める必要があります。\n\n基本的なエンドゲームの知識: キングとポーンのエンドゲームは必須。「反対色の法則」（キングの関係）、「ルール・オブ・スクエア」（ポーンの昇格を計算する）。\n\nエンドゲームの3原則: ① キングを活性化する ② パスポーンを前進させる ③ ルークをアクティブに保つ",
     descriptionEn: "The endgame is a special phase where the king becomes an active piece. Unlike the middlegame, you must advance the king to the center.\n\nEssential endgame knowledge: king and pawn endings are a must. The 'opposition' (key king relationship), the 'rule of the square' (calculating pawn promotion).\n\nThree endgame principles: ① Activate the king ② Advance passed pawns ③ Keep rooks active",
     fen: "8/4k3/8/3pP3/8/8/4K3/8 w - - 0 1",
-    moves: ["e2d3", "e7d6", "d3e4"],
+    moves: ["e2d3", "e7e6", "d3d4"],
     moveComments: {
-      ja: ["シンプルなキングとポーンのエンドゲーム", "白Kd3: キングを積極的に前進", "黒Kd6: 黒キングも中央へ — 「オポジション」の争い", "白Ke4: キングを中央に配置して支配力を最大化"],
-      en: ["Simple king and pawn endgame", "White Kd3: king actively advances", "Black Kd6: Black king also centralizes — fighting for 'opposition'", "White Ke4: king in the center maximizes influence"]
+      ja: ["シンプルなキングとポーンのエンドゲーム", "白Kd3: キングを積極的に前進", "黒Ke6: 黒キングも中央へ — 白e5ポーンに対抗", "白Kd4: キングを中央に配置して支配力を最大化"],
+      en: ["Simple king and pawn endgame", "White Kd3: king actively advances", "Black Ke6: Black king also centralizes — contesting the e5 pawn", "White Kd4: king in the center maximizes influence"]
     },
     pointsJa: [
       "✓ エンドゲームではキングを中央に積極的に進める",
