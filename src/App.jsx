@@ -5892,7 +5892,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
               ▶ {playerLang==="en"?"Next Puzzle":"次の問題"}
             </button>
           ) : (<>
-            <button onClick={()=>{ setTacticsResult(null); loadTacticsPuzzle(tacCurPuzzle); }}
+            <button onClick={()=>{ setTacticsResult(null); setTacticsShowAnswer(false); }}
               style={{...btnMod,background:"#f5ece0",color:"#7a5838",border:"1px solid #c8b090"}}>
               {playerLang==="en"?"Try Again":"もう一度"}
             </button>
@@ -6074,7 +6074,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       </>) : tacticsResult==='incorrect' ? (<>
         <span style={{fontSize:22}}>❌</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#c04040",alignSelf:"center"}}>{playerLang==="en"?"Incorrect":"不正解"}</span>
-        <button onClick={()=>{ setTacticsResult(null); loadTacticsPuzzle(tacCurPuzzle); }} style={btnStyle}>{playerLang==="en"?"Retry":"もう一度"}</button>
+        <button onClick={()=>{ setTacticsResult(null); setTacticsShowAnswer(false); }} style={btnStyle}>{playerLang==="en"?"Retry":"もう一度"}</button>
         <button onClick={()=>{ setTacticsResult(null); setTacticsShowAnswer(true); }} style={btnStyle}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
         <button onClick={handleTacticsNext} style={{...btnStyle,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
       </>) : (<>
@@ -6168,7 +6168,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <button onClick={handleTacticsNext} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶ {playerLang==="en"?"Next":"次"}</button>
               </>) : tacticsResult==='incorrect' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>❌</span>
-                <button onClick={()=>{setTacticsResult(null);loadTacticsPuzzle(tacCurPuzzle);}} style={fsBtn}>{playerLang==="en"?"Retry":"もう一度"}</button>
+                <button onClick={()=>{setTacticsResult(null);setTacticsShowAnswer(false);}} style={fsBtn}>{playerLang==="en"?"Retry":"もう一度"}</button>
                 <button onClick={()=>{setTacticsResult(null);setTacticsShowAnswer(true);}} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
                 <button onClick={handleTacticsNext} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶</button>
               </>) : (<>
@@ -7321,7 +7321,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
               ▶ {playerLang==="en"?"Next Puzzle":"次の問題"}
             </button>
           </>) : (<>
-            <button onClick={()=>{ setTacticsResultS(null); loadShogiTacticsPuzzle(tacCurPuzzleS); }}
+            <button onClick={()=>{ setTacticsResultS(null); setTacticsShowAnswerS(false); }}
               style={{...btnModS,background:"#f5ece0",color:"#7a5838",border:"1px solid #c8b090"}}>
               {playerLang==="en"?"Try Again":"もう一度"}
             </button>
@@ -7453,7 +7453,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       </>) : tacticsResultS==='incorrect' ? (<>
         <span style={{fontSize:22}}>❌</span>
         <span style={{fontFamily:serif,fontSize:16,color:"#c04040",alignSelf:"center"}}>{playerLang==="en"?"Incorrect":"不正解"}</span>
-        <button onClick={()=>{ setTacticsResultS(null); loadShogiTacticsPuzzle(tacCurPuzzleS); }} style={btnStyleS}>{playerLang==="en"?"Retry":"もう一度"}</button>
+        <button onClick={()=>{ setTacticsResultS(null); setTacticsShowAnswerS(false); }} style={btnStyleS}>{playerLang==="en"?"Retry":"もう一度"}</button>
         <button onClick={()=>{ setTacticsResultS(null); setTacticsShowAnswerS(true); }} style={btnStyleS}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
         <button onClick={()=>{ setTacticsResultS(null); setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length); }} style={{...btnStyleS,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
       </>) : (<>
@@ -7536,7 +7536,7 @@ function ShogiPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶ {playerLang==="en"?"Next":"次"}</button>
               </>) : tacticsResultS==='incorrect' ? (<>
                 <span style={{fontSize:20,alignSelf:"center"}}>❌</span>
-                <button onClick={()=>{setTacticsResultS(null);loadShogiTacticsPuzzle(tacCurPuzzleS);}} style={fsBtn}>{playerLang==="en"?"Retry":"もう一度"}</button>
+                <button onClick={()=>{setTacticsResultS(null);setTacticsShowAnswerS(false);}} style={fsBtn}>{playerLang==="en"?"Retry":"もう一度"}</button>
                 <button onClick={()=>{setTacticsResultS(null);setTacticsShowAnswerS(true);}} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
                 <button onClick={()=>{setTacticsResultS(null);setTacticsIdxS(i=>(i+1)%tacticsPuzzlesS.length);}} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶</button>
               </>) : (<>
