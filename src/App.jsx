@@ -6,6 +6,7 @@ import AnalysisView from "./AnalysisView.jsx";
 import AnalysisList from "./AnalysisList.jsx";
 import AutoAnalyzer from "./AutoAnalyzer.jsx";
 import { CHESS_OPENINGS, SHOGI_OPENINGS, CHESS_TACTICS, SHOGI_TACTICS, uciMovesToChessHistory, usiMovesToShogiHistory } from "./openingsData.js";
+import { getTacticsExplanation } from "./data/tactics-explanations.js";
 import { CHESS_STRATEGY, CHESS_STRATEGY_FEATURED } from "./data/strategy/chess-strategy.js";
 import { SHOGI_STRATEGY, SHOGI_STRATEGY_FEATURED } from "./data/strategy/shogi-strategy.js";
 import { CHESS_ENDGAME, CHESS_ENDGAME_FEATURED } from "./data/strategy/chess-endgame.js";
@@ -5866,9 +5867,12 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // Must be declared before tacticsResultModalEl to avoid TDZ crash on correct answer
   const tacCurPuzzle = tacticsMode && tacticsPuzzles.length > 0 ? tacticsPuzzles[tacticsIdx] : null;
   const btnMod = {border:"none",borderRadius:12,padding:"11px 0",fontSize:15,cursor:"pointer",fontFamily:serif,width:"100%"};
+  // 正解時の解説データを取得
+  const tacExplanation = tacCurPuzzle ? getTacticsExplanation(tacCurPuzzle.themes) : null;
+
   const tacticsResultModalEl = (tacticsMode && tacticsResult) ? (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.52)",zIndex:9600,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:serif}}>
-      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:24,padding:"36px 32px 28px",maxWidth:290,width:"88vw",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.38)",animation:"tacModalPop 0.22s cubic-bezier(0.34,1.56,0.64,1) both"}}>
+      <div style={{background:"#faf5e8",border:"2px solid #c8a86a",borderRadius:24,padding:"32px 28px 24px",maxWidth:300,width:"88vw",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.38)",animation:"tacModalPop 0.22s cubic-bezier(0.34,1.56,0.64,1) both",maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{fontSize:60,lineHeight:1.1,marginBottom:8}}>
           {tacticsResult==='correct'?'✅':'❌'}
         </div>
@@ -5878,14 +5882,44 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             :(playerLang==="en"?"Incorrect":"不正解")}
         </div>
         {tacticsResult==='correct' && tacCurPuzzle?.rating && (
-          <div style={{fontSize:13,color:"#9a7848",marginBottom:12}}>★{tacCurPuzzle.rating}</div>
+          <div style={{fontSize:13,color:"#9a7848",marginBottom:10}}>★{tacCurPuzzle.rating}</div>
         )}
         {tacticsResult==='incorrect' && (
           <div style={{fontSize:13,color:"#7a5838",marginBottom:12}}>
             {playerLang==="en"?"Keep trying — you'll get it!":"惜しい！もう一度チャレンジしよう！"}
           </div>
         )}
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:4}}>
+
+        {/* ── 解説カード（正解時のみ） ── */}
+        {tacticsResult==='correct' && tacExplanation && (
+          <div style={{
+            background:"#fff8ed",border:"1.5px solid #e8d5a8",borderRadius:14,
+            padding:"14px 14px 12px",marginBottom:14,textAlign:"left",
+          }}>
+            {/* テーマ名 */}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <span style={{fontSize:22,lineHeight:1}}>{tacExplanation.emoji}</span>
+              <span style={{fontSize:15,fontWeight:700,color:"#c8a030",letterSpacing:"0.04em"}}>
+                {playerLang==="en" ? tacExplanation.nameEn : tacExplanation.nameJa}
+              </span>
+            </div>
+            {/* 解説文 */}
+            <p style={{fontSize:13,color:"#4a3a28",lineHeight:1.65,margin:"0 0 8px",fontFamily:"sans-serif"}}>
+              {playerLang==="en" ? tacExplanation.descEn : tacExplanation.descJa}
+            </p>
+            {/* ヒント */}
+            <div style={{
+              background:"rgba(200,168,80,0.10)",borderRadius:8,
+              padding:"7px 10px",borderLeft:"3px solid #c8a86a",
+            }}>
+              <span style={{fontSize:12,color:"#7a5a20",fontFamily:"sans-serif",lineHeight:1.6}}>
+                💡 {playerLang==="en" ? tacExplanation.tipEn : tacExplanation.tipJa}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:2}}>
           {tacticsResult==='correct' ? (
             <button onClick={handleTacticsNext}
               style={{...btnMod,background:"#c8a86a",color:"#fff",fontWeight:600,fontSize:16}}>
