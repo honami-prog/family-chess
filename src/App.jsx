@@ -5450,9 +5450,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const PUZZLE_CACHE_KEY = 'chess_tactics_cache'; // last 5 puzzles for offline fallback
 
   // Safe storage helpers: localStorage with sessionStorage fallback (for iOS private mode)
+  // iOS private mode: localStorage.setItem throws, but localStorage.getItem returns null (no error).
+  // So we must check for null explicitly and fall through to sessionStorage.
   const seenStorageGet = useCallback(() => {
-    try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch {}
-    try { return JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]'); } catch {}
+    try { const v = localStorage.getItem(SEEN_KEY); if (v !== null) return JSON.parse(v); } catch {}
+    try { const v = sessionStorage.getItem(SEEN_KEY); if (v !== null) return JSON.parse(v); } catch {}
     return [];
   }, []);
   const seenStorageSave = useCallback((arr) => {
@@ -5588,7 +5590,15 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         // Prefer cache entries that match the current movesFilter; relax if none found
         const matching = cache.filter(c => movesOk((c.moves||[]).length));
         const pool = matching.length > 0 ? matching : cache;
-        const fallback = pool[Math.floor(Math.random() * pool.length)];
+        // Prefer unseen puzzles (cache puzzle id is "lichess_XXX", seen list stores raw "XXX")
+        const stripPrefix = (id) => (id || '').replace(/^lichess_/, '');
+        const cacheSeenNow = new Set(seenStorageGet());
+        const unseenPool = pool.filter(c => !cacheSeenNow.has(stripPrefix(c.id)));
+        const finalPool = unseenPool.length > 0 ? unseenPool : pool;
+        const fallback = finalPool[Math.floor(Math.random() * finalPool.length)];
+        // Mark the returned cache puzzle as seen so it won't repeat
+        cacheSeenNow.add(stripPrefix(fallback.id));
+        seenStorageSave([...cacheSeenNow].slice(-200));
         return { ...fallback, fromCache: true };
       }
     } catch (e) { /* ignore */ }
