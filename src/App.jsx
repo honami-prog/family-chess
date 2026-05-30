@@ -6,7 +6,7 @@ import AnalysisView from "./AnalysisView.jsx";
 import AnalysisList from "./AnalysisList.jsx";
 import AutoAnalyzer from "./AutoAnalyzer.jsx";
 import { CHESS_OPENINGS, SHOGI_OPENINGS, CHESS_TACTICS, SHOGI_TACTICS, uciMovesToChessHistory, usiMovesToShogiHistory } from "./openingsData.js";
-import { getTacticsExplanation } from "./data/tactics-explanations.js";
+import { getTacticsExplanation, DEFAULT_EXPLANATION } from "./data/tactics-explanations.js";
 import { CHESS_STRATEGY, CHESS_STRATEGY_FEATURED } from "./data/strategy/chess-strategy.js";
 import { SHOGI_STRATEGY, SHOGI_STRATEGY_FEATURED } from "./data/strategy/shogi-strategy.js";
 import { CHESS_ENDGAME, CHESS_ENDGAME_FEATURED } from "./data/strategy/chess-endgame.js";
@@ -4880,7 +4880,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   const [tacticsPuzzles, setTacticsPuzzles] = useState([]);
   const [tacticsIdx, setTacticsIdx] = useState(0);
   const [tacticsResult, setTacticsResult] = useState(null); // null|'correct'|'incorrect'
-  const [tacticsHintUsed, setTacticsHintUsed] = useState(false);
+  const [tacticsHintLevel, setTacticsHintLevel] = useState(0); // 0=未使用, 1=第1ヒント, 2=第2ヒント
   const [tacticsShowAnswer, setTacticsShowAnswer] = useState(false);
   const [tacticsDiffSelect, setTacticsDiffSelect] = useState(false);
   const [tacticsMovesFilter, setTacticsMovesFilter] = useState(null); // null=all | 1 | 2 | 3 | '4+'
@@ -5190,7 +5190,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
             if (nextStep >= movesArr.length) {
               // All moves complete – puzzle solved!
               setTacticsResult('correct');
-              saveTacticsFb(tacPuzzle, 'correct', tacticsHintUsed, newAttempt);
+              saveTacticsFb(tacPuzzle, 'correct', tacticsHintLevel > 0 ? `hint_${tacticsHintLevel}` : false, newAttempt);
             } else {
               // Opponent's response will be auto-applied by useEffect
               setTacticsStep(nextStep);
@@ -5438,7 +5438,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
     } else { setEpSquare(null); }
     setLastMove(null);
     setTacticsResult(null);
-    setTacticsHintUsed(false);
+    setTacticsHintLevel(0);
     setTacticsShowAnswer(false);
     setTacticsAttempt(0);
     setTacticsStep(0);
@@ -5694,7 +5694,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
       setChessTurn(prev => prev === 'w' ? 'b' : 'w');
       setSel(null); setLegal([]);
       // Reset hint/answer display for the next player turn
-      setTacticsHintUsed(false);
+      setTacticsHintLevel(0);
       setTacticsShowAnswer(false);
       setTacticsStep(prev => {
         const next = prev + 1;
@@ -5818,12 +5818,9 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
               const isLastFrom=lastMove&&lastMove.from[0]===r&&lastMove.from[1]===c;
               const isLastTo=lastMove&&lastMove.to[0]===r&&lastMove.to[1]===c;
               const tacPz = tacticsMode && tacticsPuzzles[tacticsIdx];
-              // Hint: show "to" square of current player move
+              // Answer highlight: show from/to squares of current player move
               const _tacCurMoves = tacPz ? normalizeMoves(tacPz.moves) : [];
               const _tacCurUci = _tacCurMoves[tacticsStep];
-              const _tacHintTo = _tacCurUci && _tacCurUci.length >= 4
-                ? [8 - parseInt(_tacCurUci[3]), _tacCurUci.charCodeAt(2) - 97] : null;
-              const isHintSq = tacticsMode && tacticsHintUsed && !tacticsResult && _tacHintTo && _tacHintTo[0]===r && _tacHintTo[1]===c;
               const _tacAnsUci = tacticsMode && tacticsShowAnswer && _tacCurUci;
               const isAnsSq = _tacAnsUci && (() => {
                 const fc=_tacAnsUci.charCodeAt(0)-97, fr=8-parseInt(_tacAnsUci[1]);
@@ -5845,7 +5842,6 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                   {isSel&&<div style={{position:"absolute",inset:0,background:"rgba(100,130,60,0.46)",pointerEvents:"none",zIndex:1}}/>}
                   {!isSel&&isLeg&&piece&&<div style={{position:"absolute",inset:0,border:"2.5px solid rgba(80,50,20,0.18)",borderRadius:0,pointerEvents:"none",zIndex:2}}/>}
                   {isLeg&&!piece&&<div style={{position:"absolute",width:cellSize*0.32,height:cellSize*0.32,borderRadius:"50%",background:"rgba(80,50,20,0.14)",zIndex:2}}/>}
-                  {isHintSq&&<div style={{position:"absolute",inset:0,background:"rgba(100,220,100,0.45)",pointerEvents:"none",zIndex:3}}/>}
                   {isAnsSq&&<div style={{position:"absolute",inset:0,background:"rgba(60,140,255,0.40)",pointerEvents:"none",zIndex:3}}/>}
                   {piece&&<img src={getPieceImg(piece)} alt={piece.type} draggable={false} style={{width:cellSize*0.88,height:cellSize*0.88,objectFit:"contain",display:"block",position:"relative",zIndex:3,
                     filter: piece.color==="w"
@@ -5877,8 +5873,55 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
   // Must be declared before tacticsResultModalEl to avoid TDZ crash on correct answer
   const tacCurPuzzle = tacticsMode && tacticsPuzzles.length > 0 ? tacticsPuzzles[tacticsIdx] : null;
   const btnMod = {border:"none",borderRadius:12,padding:"11px 0",fontSize:15,cursor:"pointer",fontFamily:serif,width:"100%"};
-  // 正解時の解説データを取得
+  // 正解時・ヒント時の解説データを取得
   const tacExplanation = tacCurPuzzle ? getTacticsExplanation(tacCurPuzzle.themes) : null;
+  const tacIsDefaultExpl = !tacExplanation || tacExplanation === DEFAULT_EXPLANATION;
+
+  // ── 段階的ヒントカード（テキスト表示）────────────────────────────────
+  // dark=true: fullscreen dark background 用スタイル
+  const makeTacticsHintCard = (dark = false) => {
+    if (!tacticsMode || tacticsHintLevel === 0 || !tacCurPuzzle || tacticsResult) return null;
+    let title, body = null;
+    if (tacIsDefaultExpl) {
+      title = playerLang === 'en'
+        ? '💡 Look at the piece positions carefully'
+        : '💡 相手の駒の配置をよく見てください';
+      if (tacticsHintLevel >= 2) {
+        body = playerLang === 'en'
+          ? 'Check which pieces are under attack or which pieces can attack.'
+          : 'どの駒が攻撃されているか、または攻撃できる駒はどれか確認しましょう';
+      }
+    } else {
+      const nm = playerLang === 'en' ? tacExplanation.nameEn : tacExplanation.nameJa;
+      title = `🎯 ${playerLang === 'en' ? `This is a ${nm} problem` : `これは${nm}の問題です`}`;
+      if (tacticsHintLevel >= 2) {
+        body = playerLang === 'en'
+          ? `${tacExplanation.descEn} ${tacExplanation.tipEn}`
+          : `${tacExplanation.descJa} ${tacExplanation.tipJa}`;
+      }
+    }
+    return (
+      <div style={{
+        background: dark ? 'rgba(255,248,230,0.10)' : '#fff9f0',
+        border: dark ? '1px solid rgba(255,210,120,0.30)' : '1.5px solid #e8d5a8',
+        borderRadius: 12, padding: '10px 14px', margin: dark ? '4px 0 2px' : '6px 0 2px',
+        textAlign: 'left', animation: 'tacHintFade 0.25s ease both',
+        boxSizing: 'border-box',
+      }}>
+        <div style={{
+          fontSize: 14, fontWeight: 700, fontFamily: serif,
+          color: dark ? '#f0c860' : '#c8a030',
+        }}>{title}</div>
+        {body && (
+          <div style={{
+            fontSize: 13, lineHeight: 1.65, marginTop: 6,
+            fontFamily: 'sans-serif',
+            color: dark ? 'rgba(255,238,210,0.88)' : '#5a4020',
+          }}>{body}</div>
+        )}
+      </div>
+    );
+  };
 
   const tacticsResultModalEl = (tacticsMode && tacticsResult) ? (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.52)",zIndex:9600,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:serif}}>
@@ -6091,6 +6134,7 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <div style={{fontSize:15,color:"#5a3c18",marginTop:3}}>
           {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
         </div>
+        {makeTacticsHintCard(false)}
       </>}
     </div>
   ) : null;
@@ -6122,7 +6166,13 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         <button onClick={()=>{ setTacticsResult(null); setTacticsShowAnswer(true); }} style={btnStyle}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
         <button onClick={handleTacticsNext} style={{...btnStyle,background:"#c8a86a",color:"#fff",border:"none"}}>▶ {playerLang==="en"?"Next":"次の問題"}</button>
       </>) : (<>
-        <button onClick={()=>{ setTacticsHintUsed(true); }} disabled={tacticsHintUsed} style={{...btnStyle,opacity:tacticsHintUsed?0.5:1}}>{playerLang==="en"?"Hint 💡":"ヒント 💡"}</button>
+        {tacticsHintLevel < 2 && (
+          <button onClick={()=>setTacticsHintLevel(l=>Math.min(2,l+1))} style={btnStyle}>
+            {tacticsHintLevel === 0
+              ? (playerLang==="en"?"💡 Hint":"💡 ヒント")
+              : (playerLang==="en"?"💡 More Hint":"💡 もっとヒント")}
+          </button>
+        )}
         <button onClick={()=>setTacticsShowAnswer(true)} style={btnStyle}>{playerLang==="en"?"Show Answer":"答えを見る"}</button>
         <button onClick={handleTacticsNext} style={btnStyle}>⏭ {playerLang==="en"?"Skip":"スキップ"}</button>
       </>)}
@@ -6187,9 +6237,10 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
         {/* Board area */}
         <div ref={fsAreaRefCb} style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"4px",overflow:"hidden",boxSizing:"border-box"}}>
           <div style={{width:bwStr}}>
-            {tacticsMode && tacCurPuzzle && <div style={{color:"#fff",fontSize:14,fontFamily:serif,textAlign:"center",marginBottom:4,opacity:0.9}}>
+            {tacticsMode && tacCurPuzzle && <div style={{color:"#fff",fontSize:14,fontFamily:serif,textAlign:"center",marginBottom:2,opacity:0.9}}>
               {playerLang==="en"?`Puzzle #${tacticsIdx+1}`:`問題 ${tacticsIdx+1}問目`} · {tacCurPuzzle.difficulty}{tacMovesLabel ? ` · ${tacMovesLabel}` : ''} · {playerLang==="en"?tacCurPuzzle.descEn:tacCurPuzzle.descJa}
             </div>}
+            {makeTacticsHintCard(true)}
             <div style={{transform:"rotate(180deg)"}}><ChessCapRow capColor="b"/></div>
             {boardEl}
             <ChessCapRow capColor="w"/>
@@ -6216,7 +6267,11 @@ function ChessPracticeBoard({playerLang, pcLayout, hideRules=false, playerName="
                 <button onClick={()=>{setTacticsResult(null);setTacticsShowAnswer(true);}} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
                 <button onClick={handleTacticsNext} style={{...fsBtn,background:"rgba(80,180,80,0.4)"}}>▶</button>
               </>) : (<>
-                <button onClick={()=>setTacticsHintUsed(true)} disabled={tacticsHintUsed} style={{...fsBtn,opacity:tacticsHintUsed?0.5:1}}>💡</button>
+                {tacticsHintLevel < 2 && (
+                  <button onClick={()=>setTacticsHintLevel(l=>Math.min(2,l+1))} style={fsBtn}>
+                    {tacticsHintLevel === 0 ? '💡' : '💡+'}
+                  </button>
+                )}
                 <button onClick={()=>setTacticsShowAnswer(true)} style={fsBtn}>{playerLang==="en"?"Answer":"答え"}</button>
                 <button onClick={handleTacticsNext} style={fsBtn}>⏭</button>
               </>)}
