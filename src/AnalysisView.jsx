@@ -7,7 +7,7 @@ import {
   CHESS_URL, SHOGI_URL,
   chessHistToUCI, shogiHistToUSI,
   normalizeEval, getCPL, calcAccuracy, CLASSIFY, classify,
-  EngineWorker, FB_PATH, fbLoad, fbSave,
+  EngineWorker, FB_PATH, FB_GAME_KEY, fbLoad, fbSave,
 } from "./analysisEngine.js";
 
 /* ══ board helpers (pure functions – duplicated from App.jsx) ════════ */
@@ -425,7 +425,7 @@ export default function AnalysisView({ game, gameType, playerLang, playerName, g
 
     (async()=>{
       // ── 1. Try Firebase cache ───────────────────────────────
-      const cached = await fbLoad(playerName, game.id, history.length);
+      const cached = await fbLoad(playerName, game, history.length);
       if (cached && !abortRef.current) {
         const { data, path } = cached;
         setEvals(data.evaluations);
@@ -462,16 +462,17 @@ export default function AnalysisView({ game, gameType, playerLang, playerName, g
         // ── 3. Save to Firebase ────────────────────────────────
         if (!abortRef.current && evR.length === history.length+1) {
           // ユーザーが削除した解析は自動再保存しない
-          const isDeleted = deletedGameIds instanceof Set && deletedGameIds.has(game.id);
+          const fbKey = FB_GAME_KEY(game);
+          const isDeleted = deletedGameIds instanceof Set && deletedGameIds.has(fbKey);
           if (!isDeleted) {
             setFbSaving(true);
-            const saved = await fbSave(playerName, game.id, gameType, game, uciMoves, evR, bmR);
+            const saved = await fbSave(playerName, game, gameType, uciMoves, evR, bmR);
             setFbSaving(false);
             if (saved) {
               setFbSource({
                 analyzedBy: playerName,
                 createdAt:  saved.createdAt,
-                path:       FB_PATH(playerName, game.id),
+                path:       FB_PATH(playerName, saved.fbKey || game.id),
               });
             }
           }
@@ -643,12 +644,13 @@ export default function AnalysisView({ game, gameType, playerLang, playerName, g
         }
         if (!abortRef.current && evR.length===history.length+1) {
           // ユーザーが削除した解析は自動再保存しない
-          const isDeleted = deletedGameIds instanceof Set && deletedGameIds.has(game.id);
+          const fbKey = FB_GAME_KEY(game);
+          const isDeleted = deletedGameIds instanceof Set && deletedGameIds.has(fbKey);
           if (!isDeleted) {
             setFbSaving(true);
-            const saved = await fbSave(playerName,game.id,gameType,game,uciMoves,evR,bmR);
+            const saved = await fbSave(playerName, game, gameType, uciMoves, evR, bmR);
             setFbSaving(false);
-            if (saved) setFbSource({analyzedBy:playerName,createdAt:saved.createdAt,path:FB_PATH(playerName,game.id)});
+            if (saved) setFbSource({analyzedBy:playerName,createdAt:saved.createdAt,path:FB_PATH(playerName,saved.fbKey||game.id)});
           }
           setAnalysisDone(true);
         }

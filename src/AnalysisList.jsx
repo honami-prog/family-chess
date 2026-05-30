@@ -83,7 +83,13 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
       .then(snap => {
         const val = snap.val() || {};
         const arr = Object.entries(val)
-          .map(([gameId, data]) => ({ ...data, gameId }))
+          // fbKey = Firebase のキー（"g1_2026-..." 形式 or 旧形式 "g1"）
+          // gameId = ゲームスロットID（data.gameId フィールド、ゲームとの紐付けに使用）
+          .map(([fbKey, data]) => ({
+            ...data,
+            fbKey,                              // Firebase パス操作用（削除・ロックに使用）
+            gameId: data.gameId || fbKey,       // ゲームスロットID（pendingGames照合用）
+          }))
           .filter(item => {
             const p = item.players || {};
             return p.white === playerName || p.black === playerName;
@@ -106,31 +112,31 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
 
   const lockedCount = analyses ? analyses.filter(a => a.locked).length : 0;
 
-  const handleToggleLock = async (gameId, currentLocked) => {
+  const handleToggleLock = async (fbKey, currentLocked) => {
     if (!currentLocked && lockedCount >= MAX_LOCKED) {
       setLockError(true);
       setTimeout(() => setLockError(false), 2500);
       return;
     }
-    setLocking(gameId);
+    setLocking(fbKey);
     try {
-      await set(ref(db, `${FB_PATH(playerName, gameId)}/locked`), !currentLocked);
+      await set(ref(db, `${FB_PATH(playerName, fbKey)}/locked`), !currentLocked);
       setAnalyses(prev => prev.map(a =>
-        a.gameId === gameId ? { ...a, locked: !currentLocked } : a
+        a.fbKey === fbKey ? { ...a, locked: !currentLocked } : a
       ));
     } catch (e) { console.warn("lock toggle failed:", e); }
     setLocking(null);
   };
 
-  const handleDelete = async (gameId) => {
-    setDeleting(gameId);
+  const handleDelete = async (fbKey) => {
+    setDeleting(fbKey);
     setConfirmDelete(null);
     try {
-      await remove(ref(db, `analyses/${playerName}/${gameId}`));
+      await remove(ref(db, `analyses/${playerName}/${fbKey}`));
       // Record deletion in Firebase (cross-device) and localStorage (local fast-path)
-      await fbMarkDeleted(playerName, gameId);
-      addDeletedAnalysis(playerName, gameId);
-      setAnalyses(prev => prev.filter(a => a.gameId !== gameId));
+      await fbMarkDeleted(playerName, fbKey);
+      addDeletedAnalysis(playerName, fbKey);
+      setAnalyses(prev => prev.filter(a => a.fbKey !== fbKey));
     } catch (e) { console.warn("delete failed:", e); }
     setDeleting(null);
   };
@@ -377,8 +383,8 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
               {/* ロック・削除ボタン */}
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                 <button
-                  onClick={e => { e.stopPropagation(); handleToggleLock(item.gameId, isLocked); }}
-                  disabled={locking === item.gameId}
+                  onClick={e => { e.stopPropagation(); handleToggleLock(item.fbKey, isLocked); }}
+                  disabled={locking === item.fbKey}
                   title={isLocked ? t("ロック解除", "Unlock") : t("ロック（自動削除から除外）", "Lock")}
                   style={{
                     background: isLocked ? "rgba(192,160,48,0.22)" : C.btnLock,
@@ -387,18 +393,18 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
                     padding: "4px 14px", cursor: "pointer", fontSize: 20, fontFamily: serif,
                   }}
                 >
-                  {locking === item.gameId ? "…" : isLocked ? "🔒" : "🔓"}
+                  {locking === item.fbKey ? "…" : isLocked ? "🔒" : "🔓"}
                 </button>
                 <button
-                  onClick={e => { e.stopPropagation(); setConfirmDelete(item.gameId); }}
-                  disabled={deleting === item.gameId}
+                  onClick={e => { e.stopPropagation(); setConfirmDelete(item.fbKey); }}
+                  disabled={deleting === item.fbKey}
                   style={{
                     background: C.btnDel, border: `1px solid rgba(192,48,32,0.3)`,
                     borderRadius: 8, color: C.btnDelText, padding: "4px 14px",
                     cursor: "pointer", fontSize: 20, fontFamily: serif,
                   }}
                 >
-                  {deleting === item.gameId ? "…" : "🗑"}
+                  {deleting === item.fbKey ? "…" : "🗑"}
                 </button>
               </div>
             </div>
@@ -438,7 +444,7 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
             <div style={{ color: C.text, fontSize: 22, fontWeight: 600, marginBottom: 8 }}>
               {t("解析を削除しますか？", "Delete this analysis?")}
             </div>
-            {analyses?.find(a => a.gameId === confirmDelete)?.locked && (
+            {analyses?.find(a => a.fbKey === confirmDelete)?.locked && (
               <div style={{ color: C.gold, fontSize: 20, marginBottom: 8 }}>
                 ⚠ {t("ロック済みの解析です", "This analysis is locked")}
               </div>

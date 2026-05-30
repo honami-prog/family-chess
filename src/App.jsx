@@ -8435,11 +8435,13 @@ export default function App() {
   // Open AnalysisView from a cached Firebase item (from AnalysisList)
   const openAnalysisFromCache = useCallback((cachedItem) => {
     const game = {
-      id:      cachedItem.gameId,
-      history: cachedItem.history || [],
-      players: cachedItem.players || {},
-      status:  "finished",
-      name:    cachedItem.gameId,
+      id:        cachedItem.gameId,
+      fbKey:     cachedItem.fbKey || cachedItem.gameId, // FB_GAME_KEY がこれを優先的に使用
+      startedAt: cachedItem.startedAt || null,          // FB_GAME_KEY のフォールバック計算用
+      history:   cachedItem.history || [],
+      players:   cachedItem.players || {},
+      status:    "finished",
+      name:      cachedItem.gameId,
     };
     setAnalysisData({ game, gameType: cachedItem.gameType });
     setShowAnalysisList(false);

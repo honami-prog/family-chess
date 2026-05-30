@@ -3,20 +3,20 @@ import {
   CHESS_URL, SHOGI_URL,
   chessHistToUCI, shogiHistToUSI,
   normalizeEval, EngineWorker,
-  FB_PATH, fbLoad, fbSave, fbCopyToUser, fbIsDeleted,
+  FB_PATH, FB_GAME_KEY, fbLoad, fbSave, fbCopyToUser, fbIsDeleted,
 } from "./analysisEngine.js";
 
-// localStorage key for manually-deleted analysis IDs (per user: "playerName/gameId")
+// localStorage key for manually-deleted analysis IDs (per user: "playerName/fbKey")
 export const DELETED_ANALYSES_KEY = 'deleted_analyses';
 
 export function getDeletedAnalyses() {
   try { return new Set(JSON.parse(localStorage.getItem(DELETED_ANALYSES_KEY)) || []); } catch { return new Set(); }
 }
-export function addDeletedAnalysis(playerName, gameId) {
+export function addDeletedAnalysis(playerName, fbKey) {
   try {
-    const set = getDeletedAnalyses();
-    set.add(`${playerName}/${gameId}`);
-    localStorage.setItem(DELETED_ANALYSES_KEY, JSON.stringify([...set]));
+    const s = getDeletedAnalyses();
+    s.add(`${playerName}/${fbKey}`);
+    localStorage.setItem(DELETED_ANALYSES_KEY, JSON.stringify([...s]));
   } catch {}
 }
 
@@ -26,7 +26,7 @@ export function addDeletedAnalysis(playerName, gameId) {
  * レンダリングは null（画面に何も出さない）。
  * onComplete(gameId, gameType) は解析保存完了時に呼ばれる。
  *
- * deletedGameIds: Set<gameId> — App.jsx が Firebase deletedAnalyses から購読する削除済みゲームID集合。
+ * deletedGameIds: Set<fbKey> — App.jsx が Firebase deletedAnalyses から購読する削除済みキー集合。
  * このセットに含まれるゲームは解析をスキップする。
  */
 export default function AutoAnalyzer({ game, gameType, playerName, onComplete, onProgress, onFailed, deletedGameIds }) {
@@ -37,42 +37,44 @@ export default function AutoAnalyzer({ game, gameType, playerName, onComplete, o
     const history = game.history || [];
     if (!history.length || !playerName) return;
 
+    const fbKey = FB_GAME_KEY(game); // 一意キー: "g1_2026-05-24T11-33-39-462Z"
+
     // Skip games the user has manually deleted — check prop (Firebase-backed) first, then localStorage fallback
-    const isDeletedLocally = getDeletedAnalyses().has(`${playerName}/${game.id}`);
-    const isDeletedRemotely = deletedGameIds instanceof Set && deletedGameIds.has(game.id);
+    const isDeletedLocally = getDeletedAnalyses().has(`${playerName}/${fbKey}`);
+    const isDeletedRemotely = deletedGameIds instanceof Set && deletedGameIds.has(fbKey);
     if (isDeletedLocally || isDeletedRemotely) {
-      console.log(`[AutoAnalyzer] skipping deleted analysis ${game.id}`);
+      console.log(`[AutoAnalyzer] skipping deleted analysis ${fbKey}`);
       return;
     }
 
     const isChess = gameType === "chess";
     abortRef.current = false;
 
-    console.log(`[AutoAnalyzer] start ${gameType} ${game.id} (${history.length} moves)`);
+    console.log(`[AutoAnalyzer] start ${gameType} ${fbKey} (${history.length} moves)`);
 
     (async () => {
       // Firebase 側の削除フラグを再確認（deletedGameIds が未ロード状態の場合のフォールバック）
-      if (!(deletedGameIds instanceof Set) || !deletedGameIds.has(game.id)) {
-        const fbDeleted = await fbIsDeleted(playerName, game.id);
+      if (!(deletedGameIds instanceof Set) || !deletedGameIds.has(fbKey)) {
+        const fbDeleted = await fbIsDeleted(playerName, fbKey);
         if (fbDeleted) {
-          console.log(`[AutoAnalyzer] Firebase deleted flag found for ${game.id}, skipping`);
+          console.log(`[AutoAnalyzer] Firebase deleted flag found for ${fbKey}, skipping`);
           return;
         }
       }
       if (abortRef.current) return;
 
       // 既に解析済みか確認
-      const cached = await fbLoad(playerName, game.id, history.length);
+      const cached = await fbLoad(playerName, game, history.length);
       if (cached) {
-        const ownPath = FB_PATH(playerName, game.id);
+        const ownPath = FB_PATH(playerName, fbKey);
         if (cached.path === ownPath) {
           // 自分の解析が既に保存済み — 新規通知不要
-          console.log(`[AutoAnalyzer] already cached ${game.id}`);
+          console.log(`[AutoAnalyzer] already cached ${fbKey}`);
           onComplete?.(game.id, gameType, false);
         } else {
           // 他ユーザーの解析を自分のパスにコピー — 新規通知不要
           console.log(`[AutoAnalyzer] copying from ${cached.path} to ${ownPath}`);
-          const copied = await fbCopyToUser(playerName, game.id, cached.data);
+          const copied = await fbCopyToUser(playerName, fbKey, cached.data);
           if (copied) onComplete?.(game.id, gameType, false);
         }
         return;
@@ -100,12 +102,12 @@ export default function AutoAnalyzer({ game, gameType, playerName, onComplete, o
         }
 
         if (!abortRef.current && evR.length === history.length + 1) {
-          await fbSave(playerName, game.id, gameType, game, uciMoves, evR, bmR);
-          console.log(`[AutoAnalyzer] saved ${game.id}`);
+          await fbSave(playerName, game, gameType, uciMoves, evR, bmR);
+          console.log(`[AutoAnalyzer] saved ${fbKey}`);
           onComplete?.(game.id, gameType, true); // isNew=true → バッジ通知
         }
       } catch (e) {
-        console.error(`[AutoAnalyzer] error [${gameType} ${game.id}]:`, e);
+        console.error(`[AutoAnalyzer] error [${gameType} ${fbKey}]:`, e);
         onFailed?.(game.id);
       } finally {
         worker.terminate();

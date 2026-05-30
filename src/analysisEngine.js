@@ -177,30 +177,44 @@ export class EngineWorker {
 
 /* ── Firebase helpers ─────────────────────────────────────────────── */
 export const MAX_ANALYSES_PER_USER = 10;
-export const FB_PATH = (userName, gameId) => `analyses/${userName}/${gameId}`;
-export const FB_DELETED_PATH = (userName, gameId) => `deletedAnalyses/${userName}/${gameId}`;
+export const FB_PATH = (userName, fbKey) => `analyses/${userName}/${fbKey}`;
+export const FB_DELETED_PATH = (userName, fbKey) => `deletedAnalyses/${userName}/${fbKey}`;
+
+/**
+ * ゲームセッションごとに一意な Firebase キーを生成する。
+ * 形式: "g1_2026-05-24T11-33-39-462Z"（スロットID + sanitize済みstartedAt）
+ *
+ * game.fbKey が設定済みの場合はそれを優先（AnalysisListから開いた既存解析）。
+ * startedAt がない場合はスロットID単体にフォールバック（レガシー互換）。
+ */
+export const FB_GAME_KEY = (game) => {
+  if (!game) return '';
+  if (game.fbKey) return game.fbKey;                      // 既存解析を開いた場合
+  const ts = (game.startedAt || '').replace(/[:.]/g, '-'); // ':' と '.' を '-' に置換
+  return ts ? `${game.id}_${ts}` : game.id;               // e.g. "g1_2026-05-24T11-33-39-462Z"
+};
 
 // Mark a game analysis as deleted in Firebase (persists across devices).
-export async function fbMarkDeleted(playerName, gameId) {
+export async function fbMarkDeleted(playerName, fbKey) {
   try {
-    await set(ref(db, FB_DELETED_PATH(playerName, gameId)), true);
+    await set(ref(db, FB_DELETED_PATH(playerName, fbKey)), true);
   } catch (e) { console.warn("fbMarkDeleted failed:", e); }
 }
 
 // Check if a game analysis is marked deleted in Firebase.
-export async function fbIsDeleted(playerName, gameId) {
+export async function fbIsDeleted(playerName, fbKey) {
   try {
-    const snap = await get(ref(db, FB_DELETED_PATH(playerName, gameId)));
+    const snap = await get(ref(db, FB_DELETED_PATH(playerName, fbKey)));
     return snap.exists() && snap.val() === true;
   } catch { return false; }
 }
 
-// Enforce per-user cap: if at limit and gameId is new, remove oldest unlocked entry.
+// Enforce per-user cap: if at limit and fbKey is new, remove oldest unlocked entry.
 // Returns true if there's room to save, false if all are locked (can't make room).
-async function enforceUserCap(playerName, existingEntries, gameId) {
+async function enforceUserCap(playerName, existingEntries, fbKey) {
   if (existingEntries.length < MAX_ANALYSES_PER_USER) return true;
-  // gameId already exists → overwrite, no cap issue
-  if (existingEntries.some(([id]) => id === gameId)) return true;
+  // fbKey already exists → overwrite, no cap issue
+  if (existingEntries.some(([id]) => id === fbKey)) return true;
   const unlocked = existingEntries
     .filter(([, v]) => !v.locked)
     .sort((a, b) => (a[1].createdAt || "") < (b[1].createdAt || "") ? -1 : 1);
@@ -212,25 +226,53 @@ async function enforceUserCap(playerName, existingEntries, gameId) {
   return true;
 }
 
-// Load analysis from Firebase (own user first, then others).
-// Returns { data, path } or null.
-export async function fbLoad(playerName, gameId, historyLength) {
+/**
+ * Firebase から解析データをロードする（自ユーザー優先、他ユーザーにフォールバック）。
+ * game オブジェクトを受け取り、FB_GAME_KEY で一意キーを導出する。
+ * 旧形式（スロットIDのみ）のキーにも対応（後方互換）。
+ * Returns { data, path, fbKey } or null.
+ */
+export async function fbLoad(playerName, game, historyLength) {
   try {
-    const ownSnap = await get(ref(db, FB_PATH(playerName, gameId)));
+    const uniqueKey = FB_GAME_KEY(game);
+    const slotKey   = game.id; // レガシーキー（旧形式: "g1"）
+
+    // ① 自ユーザーの一意キーを試みる
+    const ownSnap = await get(ref(db, FB_PATH(playerName, uniqueKey)));
     if (ownSnap.exists()) {
       const d = ownSnap.val();
       if (d.evaluations && d.evaluations.length === historyLength + 1) {
-        return { data: d, path: FB_PATH(playerName, gameId) };
+        return { data: d, path: FB_PATH(playerName, uniqueKey), fbKey: uniqueKey };
       }
     }
+
+    // ② 旧形式キー（後方互換: uniqueKey と slotKey が異なる場合のみ）
+    if (uniqueKey !== slotKey) {
+      const legacySnap = await get(ref(db, FB_PATH(playerName, slotKey)));
+      if (legacySnap.exists()) {
+        const d = legacySnap.val();
+        if (d.evaluations && d.evaluations.length === historyLength + 1) {
+          return { data: d, path: FB_PATH(playerName, slotKey), fbKey: slotKey };
+        }
+      }
+    }
+
+    // ③ 他ユーザーから検索（gameId + historyLength でマッチング）
     const allSnap = await get(ref(db, "analyses"));
     if (!allSnap.exists()) return null;
     const all = allSnap.val();
     for (const [uname, userObj] of Object.entries(all)) {
-      if (uname === playerName) continue;
-      const d = userObj?.[gameId];
-      if (d && d.evaluations && d.evaluations.length === historyLength + 1) {
-        return { data: d, path: FB_PATH(uname, gameId) };
+      if (uname === playerName || !userObj) continue;
+      // 一意キーを先に試す
+      const d1 = userObj[uniqueKey];
+      if (d1 && d1.evaluations && d1.evaluations.length === historyLength + 1) {
+        return { data: d1, path: FB_PATH(uname, uniqueKey), fbKey: uniqueKey };
+      }
+      // 旧形式キーもチェック（gameId フィールドで照合）
+      for (const [k, d] of Object.entries(userObj)) {
+        if (d && d.gameId === slotKey && d.evaluations && d.evaluations.length === historyLength + 1) {
+          return { data: d, path: FB_PATH(uname, k), fbKey: k };
+        }
       }
     }
     return null;
@@ -238,27 +280,32 @@ export async function fbLoad(playerName, gameId, historyLength) {
 }
 
 // Copy another user's analysis to own path (respecting per-user cap).
-export async function fbCopyToUser(playerName, gameId, sourceData) {
+export async function fbCopyToUser(playerName, fbKey, sourceData) {
   try {
     const snap = await get(ref(db, `analyses/${playerName}`));
     const existing = snap.val() || {};
     const entries = Object.entries(existing);
-    const hasRoom = await enforceUserCap(playerName, entries, gameId);
+    const hasRoom = await enforceUserCap(playerName, entries, fbKey);
     if (!hasRoom) return null;
-    const data = { ...sourceData, locked: existing[gameId]?.locked || false };
-    await set(ref(db, FB_PATH(playerName, gameId)), data);
+    const data = { ...sourceData, fbKey, locked: existing[fbKey]?.locked || false };
+    await set(ref(db, FB_PATH(playerName, fbKey)), data);
     return data;
   } catch(e) { console.warn("fbCopyToUser failed:", e); return null; }
 }
 
-// Save analysis to Firebase (enforce per-user cap; locked entries are skipped on auto-delete).
-export async function fbSave(playerName, gameId, gameType, game, uciMoves, evR, bmR) {
+/**
+ * 解析データを Firebase に保存する。
+ * game オブジェクトから一意キーを導出し、スロット再利用による上書きを防ぐ。
+ * 保存データに fbKey フィールドを含め、AnalysisList から参照できるようにする。
+ */
+export async function fbSave(playerName, game, gameType, uciMoves, evR, bmR) {
   try {
+    const firebaseKey = FB_GAME_KEY(game); // 一意キー: "g1_2026-05-24T11-33-39-462Z"
     const snap = await get(ref(db, `analyses/${playerName}`));
     const existing = snap.val() || {};
     const entries = Object.entries(existing);
 
-    const hasRoom = await enforceUserCap(playerName, entries, gameId);
+    const hasRoom = await enforceUserCap(playerName, entries, firebaseKey);
     if (!hasRoom) return null;
 
     const history = game.history || [];
@@ -275,7 +322,9 @@ export async function fbSave(playerName, gameId, gameType, game, uciMoves, evR, 
       winner = game.players?.black || null;
     }
     const data = {
-      gameId, gameType,
+      fbKey:          firebaseKey,       // Firebase キー（AnalysisListで参照用）
+      gameId:         game.id,           // スロットID（ゲーム紐付け用）
+      gameType,
       players:        game.players || {},
       aiLevel:        game.aiLevel || null,
       moves:          uciMoves,
@@ -293,10 +342,10 @@ export async function fbSave(playerName, gameId, gameType, game, uciMoves, evR, 
       createdAt:      new Date().toISOString(),
       analyzedBy:     playerName,
       winner,
-      locked:         existing[gameId]?.locked || false,
+      locked:         existing[firebaseKey]?.locked || false,
     };
-    await set(ref(db, FB_PATH(playerName, gameId)), data);
-    return data;
+    await set(ref(db, FB_PATH(playerName, firebaseKey)), data);
+    return { ...data, fbKey: firebaseKey };
   } catch (e) {
     console.warn("fbSave failed:", e);
     return null;
