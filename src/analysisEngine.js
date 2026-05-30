@@ -247,17 +247,19 @@ export async function fbLoad(playerName, game, historyLength) {
     }
 
     // ② 旧形式キー（後方互換: uniqueKey と slotKey が異なる場合のみ）
+    // startedAt が両方揃っている場合はセッション一致も確認（新ゲームが同手数の場合の誤ヒット防止）
     if (uniqueKey !== slotKey) {
       const legacySnap = await get(ref(db, FB_PATH(playerName, slotKey)));
       if (legacySnap.exists()) {
         const d = legacySnap.val();
-        if (d.evaluations && d.evaluations.length === historyLength + 1) {
+        const sessionMatch = !game.startedAt || !d.startedAt || d.startedAt === game.startedAt;
+        if (sessionMatch && d.evaluations && d.evaluations.length === historyLength + 1) {
           return { data: d, path: FB_PATH(playerName, slotKey), fbKey: slotKey };
         }
       }
     }
 
-    // ③ 他ユーザーから検索（gameId + historyLength でマッチング）
+    // ③ 他ユーザーから検索（gameId + startedAt + historyLength でマッチング）
     const allSnap = await get(ref(db, "analyses"));
     if (!allSnap.exists()) return null;
     const all = allSnap.val();
@@ -268,9 +270,10 @@ export async function fbLoad(playerName, game, historyLength) {
       if (d1 && d1.evaluations && d1.evaluations.length === historyLength + 1) {
         return { data: d1, path: FB_PATH(uname, uniqueKey), fbKey: uniqueKey };
       }
-      // 旧形式キーもチェック（gameId フィールドで照合）
+      // 旧形式キーもチェック（gameId + startedAt + historyLength で照合）
       for (const [k, d] of Object.entries(userObj)) {
-        if (d && d.gameId === slotKey && d.evaluations && d.evaluations.length === historyLength + 1) {
+        const sessionMatch = !game.startedAt || !d.startedAt || d.startedAt === game.startedAt;
+        if (d && d.gameId === slotKey && sessionMatch && d.evaluations && d.evaluations.length === historyLength + 1) {
           return { data: d, path: FB_PATH(uname, k), fbKey: k };
         }
       }
