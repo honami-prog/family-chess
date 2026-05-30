@@ -358,7 +358,7 @@ const AV = {
 };
 
 /* ══ Main component ═══════════════════════════════════════════════════ */
-export default function AnalysisView({ game, gameType, playerLang, playerName, getShogiImg, onClose, onBackToList, members, hasMobileNav, staticEvals }) {
+export default function AnalysisView({ game, gameType, playerLang, playerName, getShogiImg, onClose, onBackToList, members, hasMobileNav, staticEvals, deletedGameIds }) {
   const serif = "'Cormorant Garamond','Zen Old Mincho',Georgia,serif";
   const t = (ja,en) => playerLang==="en" ? en : ja;
   const isChess = gameType==="chess";
@@ -461,15 +461,19 @@ export default function AnalysisView({ game, gameType, playerLang, playerName, g
 
         // ── 3. Save to Firebase ────────────────────────────────
         if (!abortRef.current && evR.length === history.length+1) {
-          setFbSaving(true);
-          const saved = await fbSave(playerName, game.id, gameType, game, uciMoves, evR, bmR);
-          setFbSaving(false);
-          if (saved) {
-            setFbSource({
-              analyzedBy: playerName,
-              createdAt:  saved.createdAt,
-              path:       FB_PATH(playerName, game.id),
-            });
+          // ユーザーが削除した解析は自動再保存しない
+          const isDeleted = deletedGameIds instanceof Set && deletedGameIds.has(game.id);
+          if (!isDeleted) {
+            setFbSaving(true);
+            const saved = await fbSave(playerName, game.id, gameType, game, uciMoves, evR, bmR);
+            setFbSaving(false);
+            if (saved) {
+              setFbSource({
+                analyzedBy: playerName,
+                createdAt:  saved.createdAt,
+                path:       FB_PATH(playerName, game.id),
+              });
+            }
           }
           setAnalysisDone(true);
         }
@@ -638,10 +642,14 @@ export default function AnalysisView({ game, gameType, playerLang, playerName, g
           setProgress(Math.round((i+1)/(history.length+1)*100));
         }
         if (!abortRef.current && evR.length===history.length+1) {
-          setFbSaving(true);
-          const saved = await fbSave(playerName,game.id,gameType,game,uciMoves,evR,bmR);
-          setFbSaving(false);
-          if (saved) setFbSource({analyzedBy:playerName,createdAt:saved.createdAt,path:FB_PATH(playerName,game.id)});
+          // ユーザーが削除した解析は自動再保存しない
+          const isDeleted = deletedGameIds instanceof Set && deletedGameIds.has(game.id);
+          if (!isDeleted) {
+            setFbSaving(true);
+            const saved = await fbSave(playerName,game.id,gameType,game,uciMoves,evR,bmR);
+            setFbSaving(false);
+            if (saved) setFbSource({analyzedBy:playerName,createdAt:saved.createdAt,path:FB_PATH(playerName,game.id)});
+          }
           setAnalysisDone(true);
         }
       } catch(e) {

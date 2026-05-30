@@ -3,7 +3,7 @@ import {
   CHESS_URL, SHOGI_URL,
   chessHistToUCI, shogiHistToUSI,
   normalizeEval, EngineWorker,
-  FB_PATH, fbLoad, fbSave, fbCopyToUser,
+  FB_PATH, fbLoad, fbSave, fbCopyToUser, fbIsDeleted,
 } from "./analysisEngine.js";
 
 // localStorage key for manually-deleted analysis IDs (per user: "playerName/gameId")
@@ -25,8 +25,11 @@ export function addDeletedAnalysis(playerName, gameId) {
  * Firebase にキャッシュが既にあれば何もしない。
  * レンダリングは null（画面に何も出さない）。
  * onComplete(gameId, gameType) は解析保存完了時に呼ばれる。
+ *
+ * deletedGameIds: Set<gameId> — App.jsx が Firebase deletedAnalyses から購読する削除済みゲームID集合。
+ * このセットに含まれるゲームは解析をスキップする。
  */
-export default function AutoAnalyzer({ game, gameType, playerName, onComplete, onProgress, onFailed }) {
+export default function AutoAnalyzer({ game, gameType, playerName, onComplete, onProgress, onFailed, deletedGameIds }) {
   const abortRef = useRef(false);
   const workerRef = useRef(null);
 
@@ -34,8 +37,10 @@ export default function AutoAnalyzer({ game, gameType, playerName, onComplete, o
     const history = game.history || [];
     if (!history.length || !playerName) return;
 
-    // Skip games the user has manually deleted from the analysis list
-    if (getDeletedAnalyses().has(`${playerName}/${game.id}`)) {
+    // Skip games the user has manually deleted — check prop (Firebase-backed) first, then localStorage fallback
+    const isDeletedLocally = getDeletedAnalyses().has(`${playerName}/${game.id}`);
+    const isDeletedRemotely = deletedGameIds instanceof Set && deletedGameIds.has(game.id);
+    if (isDeletedLocally || isDeletedRemotely) {
       console.log(`[AutoAnalyzer] skipping deleted analysis ${game.id}`);
       return;
     }
@@ -46,6 +51,16 @@ export default function AutoAnalyzer({ game, gameType, playerName, onComplete, o
     console.log(`[AutoAnalyzer] start ${gameType} ${game.id} (${history.length} moves)`);
 
     (async () => {
+      // Firebase 側の削除フラグを再確認（deletedGameIds が未ロード状態の場合のフォールバック）
+      if (!(deletedGameIds instanceof Set) || !deletedGameIds.has(game.id)) {
+        const fbDeleted = await fbIsDeleted(playerName, game.id);
+        if (fbDeleted) {
+          console.log(`[AutoAnalyzer] Firebase deleted flag found for ${game.id}, skipping`);
+          return;
+        }
+      }
+      if (abortRef.current) return;
+
       // 既に解析済みか確認
       const cached = await fbLoad(playerName, game.id, history.length);
       if (cached) {

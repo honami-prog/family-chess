@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase.js";
 import { ref, get, set, remove } from "firebase/database";
-import { FB_PATH } from "./analysisEngine.js";
+import { FB_PATH, fbMarkDeleted } from "./analysisEngine.js";
 import { addDeletedAnalysis } from "./AutoAnalyzer.jsx";
 import shogiOuImg from "./assets/shogi/ou.png";
 
@@ -127,7 +127,8 @@ export default function AnalysisList({ playerName, playerLang, onClose, onOpenAn
     setConfirmDelete(null);
     try {
       await remove(ref(db, `analyses/${playerName}/${gameId}`));
-      // Record in localStorage so AutoAnalyzer won't re-trigger for this game
+      // Record deletion in Firebase (cross-device) and localStorage (local fast-path)
+      await fbMarkDeleted(playerName, gameId);
       addDeletedAnalysis(playerName, gameId);
       setAnalyses(prev => prev.filter(a => a.gameId !== gameId));
     } catch (e) { console.warn("delete failed:", e); }

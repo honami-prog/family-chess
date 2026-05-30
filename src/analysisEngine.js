@@ -178,6 +178,39 @@ export class EngineWorker {
 /* ── Firebase helpers ─────────────────────────────────────────────── */
 export const MAX_ANALYSES_PER_USER = 10;
 export const FB_PATH = (userName, gameId) => `analyses/${userName}/${gameId}`;
+export const FB_DELETED_PATH = (userName, gameId) => `deletedAnalyses/${userName}/${gameId}`;
+
+// Mark a game analysis as deleted in Firebase (persists across devices).
+export async function fbMarkDeleted(playerName, gameId) {
+  try {
+    await set(ref(db, FB_DELETED_PATH(playerName, gameId)), true);
+  } catch (e) { console.warn("fbMarkDeleted failed:", e); }
+}
+
+// Check if a game analysis is marked deleted in Firebase.
+export async function fbIsDeleted(playerName, gameId) {
+  try {
+    const snap = await get(ref(db, FB_DELETED_PATH(playerName, gameId)));
+    return snap.exists() && snap.val() === true;
+  } catch { return false; }
+}
+
+// Enforce per-user cap: if at limit and gameId is new, remove oldest unlocked entry.
+// Returns true if there's room to save, false if all are locked (can't make room).
+async function enforceUserCap(playerName, existingEntries, gameId) {
+  if (existingEntries.length < MAX_ANALYSES_PER_USER) return true;
+  // gameId already exists → overwrite, no cap issue
+  if (existingEntries.some(([id]) => id === gameId)) return true;
+  const unlocked = existingEntries
+    .filter(([, v]) => !v.locked)
+    .sort((a, b) => (a[1].createdAt || "") < (b[1].createdAt || "") ? -1 : 1);
+  if (unlocked.length === 0) {
+    console.warn("enforceUserCap: all entries locked, cannot auto-delete");
+    return false;
+  }
+  await remove(ref(db, `analyses/${playerName}/${unlocked[0][0]}`));
+  return true;
+}
 
 // Load analysis from Firebase (own user first, then others).
 // Returns { data, path } or null.
@@ -210,14 +243,8 @@ export async function fbCopyToUser(playerName, gameId, sourceData) {
     const snap = await get(ref(db, `analyses/${playerName}`));
     const existing = snap.val() || {};
     const entries = Object.entries(existing);
-    if (entries.length >= MAX_ANALYSES_PER_USER && !existing[gameId]) {
-      const unlocked = entries
-        .filter(([, v]) => !v.locked)
-        .sort((a, b) => (a[1].createdAt || "") < (b[1].createdAt || "") ? -1 : 1);
-      if (unlocked.length > 0) {
-        await remove(ref(db, `analyses/${playerName}/${unlocked[0][0]}`));
-      } else { return null; }
-    }
+    const hasRoom = await enforceUserCap(playerName, entries, gameId);
+    if (!hasRoom) return null;
     const data = { ...sourceData, locked: existing[gameId]?.locked || false };
     await set(ref(db, FB_PATH(playerName, gameId)), data);
     return data;
@@ -231,19 +258,8 @@ export async function fbSave(playerName, gameId, gameType, game, uciMoves, evR, 
     const existing = snap.val() || {};
     const entries = Object.entries(existing);
 
-    if (entries.length >= MAX_ANALYSES_PER_USER && !existing[gameId]) {
-      // ロック済みを除いた最古のエントリを削除
-      const unlocked = entries
-        .filter(([, v]) => !v.locked)
-        .sort((a, b) => (a[1].createdAt || "") < (b[1].createdAt || "") ? -1 : 1);
-      if (unlocked.length > 0) {
-        await remove(ref(db, `analyses/${playerName}/${unlocked[0][0]}`));
-      } else {
-        // 全件ロック済み（UIで9件制限のため通常到達しない）
-        console.warn("fbSave: all entries locked, cannot auto-delete");
-        return null;
-      }
-    }
+    const hasRoom = await enforceUserCap(playerName, entries, gameId);
+    if (!hasRoom) return null;
 
     const history = game.history || [];
     const classifications = history.map((_, i) => {

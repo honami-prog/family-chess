@@ -8388,6 +8388,8 @@ export default function App() {
   const [practiceAnalysisGames, setPracticeAnalysisGames] = useState([]);
   const [failedAnalysisGameIds, setFailedAnalysisGameIds] = useState(() => new Set());
   const [analysisListRefreshKey, setAnalysisListRefreshKey] = useState(0);
+  // Firebase deletedAnalyses/{playerName} を購読 — 解析を削除したゲームIDの Set
+  const [deletedAnalysisIds, setDeletedAnalysisIds] = useState(() => new Set());
   // playerName より前に定義 → TDZ回避のため ref でアクセス
   const _playerNameRef = useRef(null);
 
@@ -8840,6 +8842,21 @@ export default function App() {
       });
     });
     return () => unsub2();
+  }, [playerName]);
+
+  // Firebase deletedAnalyses/{playerName} をリアルタイム購読 — 削除済み解析IDセット
+  useEffect(() => {
+    if (!playerName) return;
+    const deletedRef = ref(db, `deletedAnalyses/${playerName}`);
+    const unsubDeleted = onValue(deletedRef, snap => {
+      const data = snap.val();
+      if (!data || typeof data !== "object") {
+        setDeletedAnalysisIds(new Set());
+        return;
+      }
+      setDeletedAnalysisIds(new Set(Object.keys(data).filter(k => data[k] === true)));
+    });
+    return () => unsubDeleted();
   }, [playerName]);
 
   // チェスタブを閲覧中は常に既読扱い（タイムスタンプ方式・チェス画面のみ）
@@ -10404,12 +10421,12 @@ export default function App() {
       ...(games      || []).filter(g => g.status !== "playing" && g.status !== "waiting" && (g.history||[]).length > 0 && (g.players?.white === playerName || g.players?.black === playerName)).map(g => ({game:g, gameType:"chess"})),
       ...(shogiGames || []).filter(g => g.status !== "playing" && g.status !== "waiting" && (g.history||[]).length > 0 && (g.players?.white === playerName || g.players?.black === playerName)).map(g => ({game:g, gameType:"shogi"})),
     ].map(({game, gameType}) => (
-      <AutoAnalyzer key={`${gameType}-${game.id}`} game={game} gameType={gameType} playerName={playerName} onComplete={onAutoAnalysisComplete} onProgress={onAutoAnalysisProgress} onFailed={onAutoAnalysisFailed} />
+      <AutoAnalyzer key={`${gameType}-${game.id}`} game={game} gameType={gameType} playerName={playerName} onComplete={onAutoAnalysisComplete} onProgress={onAutoAnalysisProgress} onFailed={onAutoAnalysisFailed} deletedGameIds={deletedAnalysisIds} />
     ))}
     {practiceAnalysisGames.map(({game, gameType}) => (
       <AutoAnalyzer key={`practice-${gameType}-${game.id}`} game={game} gameType={gameType} playerName={playerName}
         onComplete={(id, gt, isNew) => { onAutoAnalysisComplete(id, gt, isNew); setPracticeAnalysisGames(prev => prev.filter(g => g.game.id !== id)); }}
-        onProgress={onAutoAnalysisProgress} onFailed={onAutoAnalysisFailed} />
+        onProgress={onAutoAnalysisProgress} onFailed={onAutoAnalysisFailed} deletedGameIds={deletedAnalysisIds} />
     ))}
 
     {/* ── 解析一覧（全画面オーバーレイ） ── */}
@@ -10451,6 +10468,7 @@ export default function App() {
         hasMobileNav={!effectiveWide}
         onClose={() => setAnalysisData(null)}
         onBackToList={() => { setAnalysisData(null); setShowAnalysisList(true); }}
+        deletedGameIds={deletedAnalysisIds}
       />
     )}
 
